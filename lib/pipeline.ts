@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { WAVES } from "@/lib/agents/orchestrator";
 import { runHubPlanner } from "@/lib/agents/hub-planner";
 import { runValidator } from "@/lib/agents/validator";
+import { ensureDepartureFirst } from "@/lib/agents/finalize";
 import type {
   AgentContext,
   AgentName,
@@ -137,6 +138,13 @@ export async function runPipeline({
       console.warn("[pipeline] validator 修订轮失败，保留首轮结果", err);
     }
   }
+
+  // 确定性收尾：保证全程第一项是「去程出发」而非「入住酒店」（不依赖模型自觉）
+  upstream.hub_planner = ensureDepartureFirst(
+    upstream.hub_planner,
+    context,
+    upstream.transport,
+  );
 
   // 综合：hub_planner 是成品行程，validator 是质检报告
   const itinerary = upstream.hub_planner as
