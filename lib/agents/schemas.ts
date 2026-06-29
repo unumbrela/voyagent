@@ -82,8 +82,10 @@ export const schedulingSchema = obj({
 
 // ── transport：交通物流 ──
 export const transportSchema = obj({
-  airport_transfer: str,
-  intercity: str,
+  outbound: str, // 去程：从出发地到目的地的主要交通（航班/高铁/长途等）
+  inbound: str, // 返程：从目的地回出发地
+  airport_transfer: str, // 目的地机场/车站 ↔ 市区
+  intercity: str, // 目的地内/周边的城际中转（如有）
   local: {
     type: "array",
     items: obj({

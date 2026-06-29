@@ -32,6 +32,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // 出发地存进 constraints.origin（免去新增列的 schema 迁移）
+  const origin = body.origin ? String(body.origin).trim() : null;
+  const constraints = {
+    ...(typeof body.constraints === "object" && body.constraints
+      ? (body.constraints as Record<string, unknown>)
+      : {}),
+    ...(origin ? { origin } : {}),
+  };
+
   const { error: ctxErr } = await supabase.from("trip_context").insert({
     trip_id: trip.id,
     destination,
@@ -40,7 +49,7 @@ export async function POST(req: Request) {
     budget: body.budget ?? null,
     travel_style: body.travel_style ?? null,
     party_size: Number(body.party_size ?? 1),
-    constraints: body.constraints ?? {},
+    constraints,
   });
   if (ctxErr) {
     return NextResponse.json(

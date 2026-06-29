@@ -29,14 +29,17 @@ export async function GET(
     });
   }
 
+  const constraints = (ctx.constraints ?? {}) as Record<string, unknown>;
   const context: TripContext = {
     destination: ctx.destination,
+    origin:
+      typeof constraints.origin === "string" ? constraints.origin : null,
     start_date: ctx.start_date,
     end_date: ctx.end_date,
     budget: ctx.budget,
     travel_style: ctx.travel_style,
     party_size: ctx.party_size ?? 1,
-    constraints: ctx.constraints ?? {},
+    constraints,
   };
 
   const encoder = new TextEncoder();

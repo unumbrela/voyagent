@@ -1,6 +1,8 @@
 /** 单一事实来源：所有 agent 只读它 */
 export interface TripContext {
   destination: string;
+  /** 出发地（自动定位或手填）；用于规划去程/返程交通 */
+  origin: string | null;
   start_date: string | null;
   end_date: string | null;
   budget: number | null;

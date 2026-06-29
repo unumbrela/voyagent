@@ -30,6 +30,7 @@ interface Food {
 const ctx: AgentContext = {
   context: {
     destination: "东京",
+    origin: "北京",
     start_date: "2026-09-01",
     end_date: "2026-09-05",
     budget: 12000,
