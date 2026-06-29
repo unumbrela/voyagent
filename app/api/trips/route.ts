@@ -32,13 +32,18 @@ export async function POST(req: Request) {
     );
   }
 
-  // 出发地存进 constraints.origin（免去新增列的 schema 迁移）
+  // 出发地与时间约束存进 constraints（免去新增列的 schema 迁移）
   const origin = body.origin ? String(body.origin).trim() : null;
   const constraints = {
     ...(typeof body.constraints === "object" && body.constraints
       ? (body.constraints as Record<string, unknown>)
       : {}),
     ...(origin ? { origin } : {}),
+    ...(body.now ? { now: String(body.now) } : {}),
+    ...(body.depart_time ? { depart_time: String(body.depart_time) } : {}),
+    ...(body.return_by_time
+      ? { return_by_time: String(body.return_by_time) }
+      : {}),
   };
 
   const { error: ctxErr } = await supabase.from("trip_context").insert({

@@ -17,6 +17,7 @@
 - **结构化输出**：每个 agent 把 `lib/agents/schemas.ts` 的 json_schema 写进 prompt，DeepSeek 用 `json_object` 模式返回规范 JSON
 - **真实数据（自建搜索）**：DeepSeek 没有内置 web 搜索，所以自己实现了一套 **function-calling 工具循环**（`lib/deepseek.ts`）：Activities/Transport 挂 `web_search` 工具，模型决定何时搜，工具后端走 **Tavily**（`lib/search.ts`，可插拔，换 Serper/Bing 只改这一个文件）
 - **交通取证、不编造**：Transport agent 对真实性负责——去程/返程必须搜真实车次/航班，每个班次带 `source_url`（来源）+ `booking_url`（12306/航司官方购票）；搜不到则标「实时查询」并给官方链接，**绝不编造车次号或票价**。Hub-planner 忠实搬运不改动，Validator 把「无来源的票务」判为 high 级问题。未配置 `TAVILY_API_KEY` 时降级为只给官方购票链接（`source_url` 留空＝未核实）
+- **时间感知**：表单自动获取当前时间（可手填出发/返程时间）。去程班次必须晚于当前时间（出发日为今天时，不推已发车的票）且不早于指定出发时间；返程到达须早于「最晚到达时间」。除 prompt 约束外，`lib/agents/transport.ts` 还有一道**确定性代码过滤**剔除越界班次（硬保证，不依赖模型自觉），Validator 复核
 - **单一 provider（全 DeepSeek）**：7 个 agent 全部走 DeepSeek `deepseek-chat`（OpenAI 兼容接口，`lib/deepseek.ts`）。`lib/agents/runAgent.ts` 仍保留 `provider` 抽象与 anthropic 分支，想切回 Claude 只需改 agent 里的 `provider/model`
 - **实时进度**：`GET /api/trips/[id]/plan` 走 SSE，前端 `EventSource` 逐 agent 渲染
 

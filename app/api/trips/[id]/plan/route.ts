@@ -30,12 +30,15 @@ export async function GET(
   }
 
   const constraints = (ctx.constraints ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v ? v : null);
   const context: TripContext = {
     destination: ctx.destination,
-    origin:
-      typeof constraints.origin === "string" ? constraints.origin : null,
+    origin: str(constraints.origin),
     start_date: ctx.start_date,
     end_date: ctx.end_date,
+    now: str(constraints.now),
+    depart_time: str(constraints.depart_time),
+    return_by_time: str(constraints.return_by_time),
     budget: ctx.budget,
     travel_style: ctx.travel_style,
     party_size: ctx.party_size ?? 1,

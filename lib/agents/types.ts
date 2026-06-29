@@ -5,6 +5,12 @@ export interface TripContext {
   origin: string | null;
   start_date: string | null;
   end_date: string | null;
+  /** 当前本地时间 "YYYY-MM-DD HH:MM"；用于过滤已发车的去程班次 */
+  now: string | null;
+  /** 去程最早出发时间 "HH:MM"（可选） */
+  depart_time: string | null;
+  /** 返程最晚到达时间 "HH:MM"（可选）；返程到达须早于此 */
+  return_by_time: string | null;
   budget: number | null;
   travel_style: string | null;
   party_size: number;

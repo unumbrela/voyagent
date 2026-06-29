@@ -55,6 +55,15 @@ export default function Home() {
     requestGeo();
   }
 
+  // 当前时间（本地）：用于过滤「已过站」的车次。每分钟刷新一次显示。
+  const [now, setNow] = useState("");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(formatLocal(new Date()));
+    const t = setInterval(() => setNow(formatLocal(new Date())), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -65,6 +74,10 @@ export default function Home() {
       origin: (fd.get("origin") as string)?.trim() || null,
       start_date: fd.get("start_date") || null,
       end_date: fd.get("end_date") || null,
+      // 提交时取最新本地时间；浏览器拿不到时为空，由下方手填时间兜底
+      now: typeof Date !== "undefined" ? formatLocal(new Date()) : null,
+      depart_time: fd.get("depart_time") || null, // 去程最早出发时间（可选）
+      return_by_time: fd.get("return_by_time") || null, // 返程最晚到达时间（可选）
       budget: fd.get("budget") ? Number(fd.get("budget")) : null,
       travel_style: fd.get("travel_style") || null,
       party_size: Number(fd.get("party_size") || 1),
@@ -123,12 +136,26 @@ export default function Home() {
           />
         </Field>
 
+        <p className="text-xs text-neutral-400">
+          {now ? `当前时间：${now}（自动获取）` : "未能获取当前时间"}，
+          用于过滤已发车的班次；也可在下方手动指定出发/返程时间。
+        </p>
+
         <div className="grid grid-cols-2 gap-4">
           <Field label="出发日期">
             <input type="date" name="start_date" className={inputCls} />
           </Field>
+          <Field label="出发时间（可选，最早）">
+            <input type="time" name="depart_time" className={inputCls} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <Field label="返回日期">
             <input type="date" name="end_date" className={inputCls} />
+          </Field>
+          <Field label="返程最晚到达（可选）">
+            <input type="time" name="return_by_time" className={inputCls} />
           </Field>
         </div>
 
@@ -171,6 +198,15 @@ export default function Home() {
         </button>
       </form>
     </main>
+  );
+}
+
+/** 本地时间格式化为 "YYYY-MM-DD HH:MM"（不带时区，按旅客本地时间理解） */
+function formatLocal(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}`
   );
 }
 
