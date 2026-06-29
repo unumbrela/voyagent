@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+// 地图依赖浏览器（Leaflet 直接操作 DOM），仅客户端加载，避免 SSR
+const TripMap = dynamic(() => import("./TripMap"), { ssr: false });
 
 type Status = "pending" | "running" | "done" | "error";
 type Phase = "loading" | "planning" | "ready" | "error";
@@ -282,6 +286,9 @@ export default function TripPage() {
           <p className="mt-1 text-xs text-neutral-400">
             可拖拽条目排序、直接修改内容；交通条目可点「🔍 搜车票」换乘真实车次。
           </p>
+
+          {/* 行程地图：起点 → 每日各站 → 路线可视化 */}
+          {days.length > 0 && <TripMap days={days} meta={meta} />}
 
           <div className="mt-6 space-y-6">
             {days.map((d, di) => (
