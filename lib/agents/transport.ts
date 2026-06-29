@@ -2,11 +2,14 @@ import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { transportSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
+import { railBookingUrl } from "@/lib/stations";
 import type { AgentContext, TripContext } from "./types";
 
 interface TransportOption {
   depart: string;
   arrive: string;
+  mode?: string;
+  booking_url?: string;
   [k: string]: unknown;
 }
 interface TransportLeg {
@@ -59,6 +62,34 @@ function enforceTimeWindows(payload: TransportPayload, c: TripContext): void {
   }
 }
 
+const isRail = (mode?: string) =>
+  !!mode && /高铁|动车|火车|城际|动卧|普速|快速|列车/.test(mode);
+
+/**
+ * 把铁路 options 的 booking_url 覆盖成 12306 直达深链（线路+日期的余票查询页，
+ * 登录即可购票），用权威车站码确定性生成，不依赖模型给的链接。
+ */
+async function applyBookingLinks(
+  payload: TransportPayload,
+  c: TripContext,
+): Promise<void> {
+  const dest = c.destination;
+  const legs = [
+    { leg: payload.outbound, from: c.origin, to: dest, date: c.start_date },
+    { leg: payload.inbound, from: dest, to: c.origin, date: c.end_date },
+  ];
+  for (const { leg, from, to, date } of legs) {
+    if (!leg?.options?.length || !from || !to) continue;
+    let url: string | null = null;
+    for (const o of leg.options) {
+      if (isRail(o.mode)) {
+        url ??= await railBookingUrl(from, to, date);
+        o.booking_url = url;
+      }
+    }
+  }
+}
+
 /** Transport：交通物流（依赖已排好的日程，DeepSeek + 自建 web 搜索） */
 export async function runTransport(ctx: AgentContext) {
   const payload = await runAgent<TransportPayload>({
@@ -95,5 +126,7 @@ export async function runTransport(ctx: AgentContext) {
   });
   // 硬保证：再用代码剔除越界班次，不依赖模型自觉
   enforceTimeWindows(payload, ctx.context);
+  // 铁路购票链接替换成 12306 直达深链
+  await applyBookingLinks(payload, ctx.context);
   return payload;
 }
