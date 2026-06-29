@@ -49,13 +49,18 @@ export default function TripPage() {
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [finished, setFinished] = useState(false);
-  const startedRef = useRef(false);
+  const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    if (!id || startedRef.current) return;
-    startedRef.current = true; // 防止 StrictMode / 重连重复触发
+    if (!id) return;
+    // React StrictMode（开发模式默认开）会把 effect 跑成 setup→cleanup→setup 两遍。
+    // 用 ref 保证整页只建一个 EventSource，且【不在 cleanup 里关闭】——否则唯一的连接
+    // 会被首次 cleanup 关掉、又被 ref 拦着不重建，导致永远收不到事件。
+    // 连接在收到 done/error 时自行关闭（也阻止 EventSource 自动重连重跑流水线）。
+    if (esRef.current) return;
 
     const es = new EventSource(`/api/trips/${id}/plan`);
+    esRef.current = es;
     es.onmessage = (ev) => {
       const e = JSON.parse(ev.data);
       if (e.type === "agent_status") {
@@ -63,7 +68,7 @@ export default function TripPage() {
       } else if (e.type === "done") {
         setItinerary(e.itinerary as Itinerary);
         setFinished(true);
-        es.close(); // 关键：关闭以阻止 EventSource 自动重连重跑流水线
+        es.close();
       } else if (e.type === "error") {
         setError(e.message);
         setFinished(true);
@@ -71,10 +76,8 @@ export default function TripPage() {
       }
     };
     es.onerror = () => {
-      // 流正常结束也会触发 onerror；仅在未完成时报错
-      if (!startedRef.current) return;
+      // 流正常结束（服务端 close）也会触发 onerror；已完成则忽略，不自动重连。
     };
-    return () => es.close();
   }, [id]);
 
   return (
