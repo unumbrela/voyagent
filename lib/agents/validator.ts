@@ -1,14 +1,15 @@
-import { MODELS } from "@/lib/anthropic";
+import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { validatorSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import type { AgentContext } from "./types";
 
-/** Validator：出行前质检（编排末环，用 Opus） */
+/** Validator：出行前质检（编排末环，DeepSeek） */
 export function runValidator(ctx: AgentContext) {
   return runAgent({
-    model: MODELS.opus,
-    effort: "high",
+    provider: "deepseek",
+    model: DEEPSEEK.chat,
+    maxTokens: 8000,
     schema: validatorSchema,
     system:
       "你是出行前质检员。审查最终行程是否：节奏合理（不过载）、预算匹配、区域动线顺、" +

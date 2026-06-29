@@ -14,9 +14,9 @@
   4. `hub_planner`（综合成最终行程）
   5. `validator`（出行前质检）
 - **单一事实来源**：Supabase `trip_context` 表，所有 agent 只读它；产物累积写 `agent_outputs`
-- **结构化输出**：每个 agent 用 `output_config.format`（json_schema）返回规范 JSON（`lib/agents/schemas.ts`）
-- **真实数据**：调研/活动/美食/交通挂服务端工具 `web_search_20260209`
-- **多 provider + 模型分层**：复杂 agent（Activities/Scheduling/Transport/HubPlanner/Validator）用 Claude `claude-opus-4-8`；轻量 agent（Enrichment/Food）用 **DeepSeek** `deepseek-chat`。provider 分派在 `lib/agents/runAgent.ts`，DeepSeek 走 `lib/deepseek.ts`（OpenAI 兼容 + `json_object` 模式，schema 写进 prompt 指令）
+- **结构化输出**：每个 agent 把 `lib/agents/schemas.ts` 的 json_schema 写进 prompt，DeepSeek 用 `json_object` 模式返回规范 JSON
+- **真实数据（自建搜索）**：DeepSeek 没有内置 web 搜索，所以自己实现了一套 **function-calling 工具循环**（`lib/deepseek.ts`）：Activities/Transport 挂 `web_search` 工具，模型决定何时搜，工具后端走 **Tavily**（`lib/search.ts`，可插拔，换 Serper/Bing 只改这一个文件）。未配置 `TAVILY_API_KEY` 时优雅降级——不报错，agent 靠自身知识作答
+- **单一 provider（全 DeepSeek）**：7 个 agent 全部走 DeepSeek `deepseek-chat`（OpenAI 兼容接口，`lib/deepseek.ts`）。`lib/agents/runAgent.ts` 仍保留 `provider` 抽象与 anthropic 分支，想切回 Claude 只需改 agent 里的 `provider/model`
 - **实时进度**：`GET /api/trips/[id]/plan` 走 SSE，前端 `EventSource` 逐 agent 渲染
 
 ## 目录速览
@@ -28,10 +28,12 @@ app/
   api/trips/route.ts            # 建 trip + trip_context
   api/trips/[id]/plan/route.ts  # SSE 触发编排
 lib/
-  anthropic.ts                  # Claude client + 模型分层
+  deepseek.ts                   # DeepSeek client（json_object + function-calling 工具循环）
+  search.ts                     # 自建 web 搜索（Tavily 后端 + 工具定义，可插拔/可降级）
+  anthropic.ts                  # Claude client（保留，默认不用）
   supabase/{server,client}.ts   # service_role / anon client
   agents/
-    runAgent.ts                 # 通用单 agent 封装（流式+结构化+web搜索续跑）
+    runAgent.ts                 # 通用单 agent 封装（provider 分派 + 结构化 + web 搜索）
     schemas.ts  prompt.ts  types.ts
     enrichment/activities/food/scheduling/transport/hub-planner/validator.ts
     orchestrator.ts             # WAVES 派发结构
@@ -41,7 +43,7 @@ supabase/migrations/0001_init.sql
 
 ## 运行
 
-1. **填环境变量**：复制 `.env.local.example` 为 `.env.local`，填 `ANTHROPIC_API_KEY` 与 Supabase 三个值。
+1. **填环境变量**：复制 `.env.local.example` 为 `.env.local`，填 `DEEPSEEK_API_KEY` 与 Supabase 三个值；`TAVILY_API_KEY` 可选（填了 Activities/Transport 才联网核实真实数据），`ANTHROPIC_API_KEY` 现在不需要。
 2. **建表**：在 Supabase SQL Editor 执行 `supabase/migrations/0001_init.sql`（或 `supabase db push`）。
 3. **启动**：
    ```bash
@@ -64,5 +66,5 @@ pnpm test:deepseek
 ## 说明 / 后续
 
 - 当前未接入用户认证：`trips.user_id` 暂为 null，服务端用 `service_role` 绕过 RLS；多用户 RLS 策略已在 migration 预留。
-- 成本优化：可给稳定 system 前缀加 prompt caching；Activities/Transport 可后续降到更便宜模型。
+- 成本优化：DeepSeek 自带上下文硬盘缓存（命中即降价），稳定的 system 前缀天然受益；复杂 agent 可按需切到 `deepseek-reasoner`。
 - 因数据流是「单一事实来源 + 产物累积」，天然支持「重跑单个 agent」等局部重算扩展。

@@ -1,14 +1,15 @@
-import { MODELS } from "@/lib/anthropic";
+import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { schedulingSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import type { AgentContext } from "./types";
 
-/** Scheduling：逐日行程编排（核心推理，用 Opus，读上游活动/餐饮/背景） */
+/** Scheduling：逐日行程编排（核心推理，DeepSeek，读上游活动/餐饮/背景） */
 export function runScheduling(ctx: AgentContext) {
   return runAgent({
-    model: MODELS.opus,
-    effort: "high",
+    provider: "deepseek",
+    model: DEEPSEEK.chat,
+    maxTokens: 8000,
     schema: schedulingSchema,
     system:
       "你是行程编排专家。综合上游的活动、餐饮、目的地背景，按天数排出合理的逐日框架。" +

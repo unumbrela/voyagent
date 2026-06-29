@@ -10,15 +10,17 @@ const AGENTS: {
   key: string;
   label: string;
   wave: number;
-  provider: "claude" | "deepseek";
+  provider: "deepseek";
+  /** 是否挂自建 web 搜索 */
+  search?: boolean;
 }[] = [
   { key: "enrichment", label: "目的地调研", wave: 1, provider: "deepseek" },
-  { key: "activities", label: "活动推荐", wave: 1, provider: "claude" },
+  { key: "activities", label: "活动推荐", wave: 1, provider: "deepseek", search: true },
   { key: "food", label: "餐饮指南", wave: 1, provider: "deepseek" },
-  { key: "scheduling", label: "日程编排", wave: 2, provider: "claude" },
-  { key: "transport", label: "交通物流", wave: 3, provider: "claude" },
-  { key: "hub_planner", label: "综合行程", wave: 4, provider: "claude" },
-  { key: "validator", label: "出行质检", wave: 5, provider: "claude" },
+  { key: "scheduling", label: "日程编排", wave: 2, provider: "deepseek" },
+  { key: "transport", label: "交通物流", wave: 3, provider: "deepseek", search: true },
+  { key: "hub_planner", label: "综合行程", wave: 4, provider: "deepseek" },
+  { key: "validator", label: "出行质检", wave: 5, provider: "deepseek" },
 ];
 
 interface ItineraryItem {
@@ -94,15 +96,14 @@ export default function TripPage() {
             >
               <Dot status={st} />
               <span className="text-sm font-medium">{a.label}</span>
-              <span
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  a.provider === "deepseek"
-                    ? "bg-indigo-100 text-indigo-700"
-                    : "bg-orange-100 text-orange-700"
-                }`}
-              >
-                {a.provider === "deepseek" ? "DeepSeek" : "Claude"}
+              <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                DeepSeek
               </span>
+              {a.search && (
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                  联网
+                </span>
+              )}
               <span className="ml-auto text-xs text-neutral-400">
                 第 {a.wave} 波 · {statusLabel(st)}
               </span>

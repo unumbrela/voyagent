@@ -1,14 +1,15 @@
-import { MODELS } from "@/lib/anthropic";
+import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { transportSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import type { AgentContext } from "./types";
 
-/** Transport：交通物流（依赖已排好的日程，用 Opus + web 搜索） */
+/** Transport：交通物流（依赖已排好的日程，DeepSeek + 自建 web 搜索） */
 export function runTransport(ctx: AgentContext) {
   return runAgent({
-    model: MODELS.opus,
-    effort: "high",
+    provider: "deepseek",
+    model: DEEPSEEK.chat,
+    maxTokens: 8000,
     useWebSearch: true,
     schema: transportSchema,
     system:

@@ -1,14 +1,15 @@
-import { MODELS } from "@/lib/anthropic";
+import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { activitiesSchema } from "./schemas";
 import { contextBlock } from "./prompt";
 import type { AgentContext } from "./types";
 
-/** Activities：景点/活动推荐（质量敏感，用 Opus + web 搜索） */
+/** Activities：景点/活动推荐（质量敏感，DeepSeek + 自建 web 搜索） */
 export function runActivities(ctx: AgentContext) {
   return runAgent({
-    model: MODELS.opus,
-    effort: "high",
+    provider: "deepseek",
+    model: DEEPSEEK.chat,
+    maxTokens: 8000,
     useWebSearch: true,
     schema: activitiesSchema,
     system:

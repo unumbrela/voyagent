@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { callDeepSeekJSON } from "@/lib/deepseek";
+import { WEB_SEARCH_TOOL, runWebSearchTool } from "@/lib/search";
 import { parseJsonLoose } from "@/lib/json";
 
 export type Provider = "anthropic" | "deepseek";
@@ -28,12 +29,18 @@ export interface RunAgentOpts {
  */
 export async function runAgent<T = unknown>(opts: RunAgentOpts): Promise<T> {
   if (opts.provider === "deepseek") {
+    // DeepSeek 没有内置 web 搜索：useWebSearch 时挂上自建的 web_search 工具循环
+    const wantSearch = opts.useWebSearch === true;
     return callDeepSeekJSON<T>({
       model: opts.model,
       system: opts.system,
       userPrompt: opts.userPrompt,
       schema: opts.schema,
       maxTokens: opts.maxTokens ?? 4096,
+      tools: wantSearch ? [WEB_SEARCH_TOOL] : undefined,
+      onToolCall: wantSearch
+        ? (_name, argsJson) => runWebSearchTool(argsJson)
+        : undefined,
     });
   }
   return runAnthropic<T>(opts);

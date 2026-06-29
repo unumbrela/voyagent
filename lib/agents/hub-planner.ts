@@ -1,15 +1,15 @@
-import { MODELS } from "@/lib/anthropic";
+import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { itinerarySchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import type { AgentContext } from "./types";
 
-/** Hub Planner：把所有产物综合成最终行程（编排器的"综合"环节，用 Opus） */
+/** Hub Planner：把所有产物综合成最终行程（编排器的"综合"环节，DeepSeek） */
 export function runHubPlanner(ctx: AgentContext) {
   return runAgent({
-    model: MODELS.opus,
-    effort: "high",
-    maxTokens: 24000,
+    provider: "deepseek",
+    model: DEEPSEEK.chat,
+    maxTokens: 8000,
     schema: itinerarySchema,
     system:
       "你是总规划师。把上游所有产物（背景、活动、餐饮、日程框架、交通）融合成一份成品行程：" +
