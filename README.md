@@ -20,6 +20,7 @@
 - **时间感知**：表单自动获取当前时间（可手填出发/返程时间）。去程班次必须晚于当前时间（出发日为今天时，不推已发车的票）且不早于指定出发时间；返程到达须早于「最晚到达时间」。除 prompt 约束外，`lib/agents/transport.ts` 还有一道**确定性代码过滤**剔除越界班次（硬保证，不依赖模型自觉），Validator 复核
 - **单一 provider（全 DeepSeek）**：7 个 agent 全部走 DeepSeek `deepseek-chat`（OpenAI 兼容接口，`lib/deepseek.ts`）。`lib/agents/runAgent.ts` 仍保留 `provider` 抽象与 anthropic 分支，想切回 Claude 只需改 agent 里的 `provider/model`
 - **实时进度**：`GET /api/trips/[id]/plan` 走 SSE，前端 `EventSource` 逐 agent 渲染
+- **可视化编辑 + 持久化**：成品行程每个条目是可**拖拽排序**、可**直接改内容**（时间/标题/详情/花费/类型）、可增删的模块；交通条目带「🔍 搜车票」——`GET /api/trains` 实时搜真实高铁车次（Tavily+模型，带来源 + 12306 直达深链）下拉替换。「保存」`PUT /api/trips/[id]` 写回库。进入已完成行程走 `GET /api/trips/[id]` 直接读库渲染、**不再重跑流水线**（幂等，编辑不被覆盖）
 
 ## 目录速览
 
@@ -28,10 +29,13 @@ app/
   page.tsx                      # 落地页表单
   trips/[id]/page.tsx           # 进度面板 + 行程渲染 (EventSource)
   api/trips/route.ts            # 建 trip + trip_context
+  api/trips/[id]/route.ts       # GET 读已存行程(不重跑) / PUT 保存编辑
   api/trips/[id]/plan/route.ts  # SSE 触发编排
+  api/trains/route.ts           # 实时搜真实高铁车次(Tavily+模型, 带购票深链)
 lib/
   deepseek.ts                   # DeepSeek client（json_object + function-calling 工具循环）
   search.ts                     # 自建 web 搜索（Tavily 后端 + 工具定义，可插拔/可降级）
+  stations.ts                   # 12306 官方车站码（权威）→ 构造直达购票深链
   anthropic.ts                  # Claude client（保留，默认不用）
   supabase/{server,client}.ts   # service_role / anon client
   agents/
