@@ -144,7 +144,9 @@ export default function TripPage() {
                       </span>
                       <span>
                         <span className="font-medium">{it.title}</span>{" "}
-                        <span className="text-neutral-500">{it.detail}</span>
+                        <span className="text-neutral-500">
+                          <Linkify text={it.detail} />
+                        </span>
                         {it.est_cost ? (
                           <span className="text-neutral-400">
                             {" "}
@@ -165,8 +167,10 @@ export default function TripPage() {
               <dl className="mt-2 space-y-1 text-sm">
                 {itinerary.references.map((r, i) => (
                   <div key={i} className="flex gap-2">
-                    <dt className="text-neutral-400">{r.label}</dt>
-                    <dd>{r.value}</dd>
+                    <dt className="shrink-0 text-neutral-400">{r.label}</dt>
+                    <dd>
+                      <Linkify text={r.value} />
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -181,6 +185,31 @@ export default function TripPage() {
         </p>
       )}
     </main>
+  );
+}
+
+/** 把文本里的 URL 渲染成可点击链接（购票/来源链接用） */
+function Linkify({ text }: { text: string }) {
+  if (!text) return null;
+  const parts = text.split(/(https?:\/\/[^\s，。）)]+)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^https?:\/\//.test(p) ? (
+          <a
+            key={i}
+            href={p}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 underline underline-offset-2 hover:text-blue-800"
+          >
+            购票/详情
+          </a>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
   );
 }
 

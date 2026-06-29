@@ -81,11 +81,29 @@ export const schedulingSchema = obj({
 });
 
 // ── transport：交通物流 ──
+// 每个具体班次都要可核实：来源链接 + 官方购票链接，未搜到则标注"实时查询"、不得编造。
+const transportOption = obj({
+  mode: str, // 高铁/动车/飞机/大巴/轮渡
+  name: str, // 车次或航班号，如 "G7" / "MU515"；未搜到填 "见购票链接"
+  depart: str, // 出发站/机场 + 时间，如 "上海虹桥 09:00"
+  arrive: str, // 到达站/机场 + 时间
+  duration: str, // 时长，如 "约4h28m"
+  price_cny: str, // 票价或区间（人民币），注明以官方实时为准；未知填 "实时查询"
+  booking_url: str, // 官方购票链接（12306 / 航司官网 / 携程）
+  source_url: str, // 信息来源链接（来自搜索结果）；未搜到填 ""
+});
+
+const transportLeg = obj({
+  from: str, // 出发地
+  to: str, // 目的地
+  recommended: str, // 一句话推荐：选哪个班次、为何（衔接/价格/时长）
+  options: { type: "array", items: transportOption }, // 2~4 个真实可选班次
+});
+
 export const transportSchema = obj({
-  outbound: str, // 去程：从出发地到目的地的主要交通（航班/高铁/长途等）
-  inbound: str, // 返程：从目的地回出发地
-  airport_transfer: str, // 目的地机场/车站 ↔ 市区
-  intercity: str, // 目的地内/周边的城际中转（如有）
+  outbound: transportLeg, // 去程：出发地 → 目的地
+  inbound: transportLeg, // 返程：目的地 → 出发地
+  airport_transfer: str, // 目的地端 机场/车站 ↔ 市区/酒店
   local: {
     type: "array",
     items: obj({

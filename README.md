@@ -15,7 +15,8 @@
   5. `validator`（出行前质检）
 - **单一事实来源**：Supabase `trip_context` 表，所有 agent 只读它；产物累积写 `agent_outputs`
 - **结构化输出**：每个 agent 把 `lib/agents/schemas.ts` 的 json_schema 写进 prompt，DeepSeek 用 `json_object` 模式返回规范 JSON
-- **真实数据（自建搜索）**：DeepSeek 没有内置 web 搜索，所以自己实现了一套 **function-calling 工具循环**（`lib/deepseek.ts`）：Activities/Transport 挂 `web_search` 工具，模型决定何时搜，工具后端走 **Tavily**（`lib/search.ts`，可插拔，换 Serper/Bing 只改这一个文件）。未配置 `TAVILY_API_KEY` 时优雅降级——不报错，agent 靠自身知识作答
+- **真实数据（自建搜索）**：DeepSeek 没有内置 web 搜索，所以自己实现了一套 **function-calling 工具循环**（`lib/deepseek.ts`）：Activities/Transport 挂 `web_search` 工具，模型决定何时搜，工具后端走 **Tavily**（`lib/search.ts`，可插拔，换 Serper/Bing 只改这一个文件）
+- **交通取证、不编造**：Transport agent 对真实性负责——去程/返程必须搜真实车次/航班，每个班次带 `source_url`（来源）+ `booking_url`（12306/航司官方购票）；搜不到则标「实时查询」并给官方链接，**绝不编造车次号或票价**。Hub-planner 忠实搬运不改动，Validator 把「无来源的票务」判为 high 级问题。未配置 `TAVILY_API_KEY` 时降级为只给官方购票链接（`source_url` 留空＝未核实）
 - **单一 provider（全 DeepSeek）**：7 个 agent 全部走 DeepSeek `deepseek-chat`（OpenAI 兼容接口，`lib/deepseek.ts`）。`lib/agents/runAgent.ts` 仍保留 `provider` 抽象与 anthropic 分支，想切回 Claude 只需改 agent 里的 `provider/model`
 - **实时进度**：`GET /api/trips/[id]/plan` 走 SSE，前端 `EventSource` 逐 agent 渲染
 

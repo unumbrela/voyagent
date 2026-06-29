@@ -86,11 +86,21 @@ export async function runWebSearchTool(argsJson: string): Promise<string> {
   if (!query) return "搜索参数缺少 query。";
 
   if (!process.env.TAVILY_API_KEY) {
-    return "（web 搜索未配置 TAVILY_API_KEY，本次未联网；请基于你已有的知识尽力作答。）";
+    return (
+      "【搜索不可用：未配置 TAVILY_API_KEY】本次无法联网核实。" +
+      "严禁编造具体车次/航班号、时刻或票价；请改为：给出官方购票/查询链接" +
+      "（铁路 https://www.12306.cn ，机票走航司官网或携程/去哪儿），" +
+      "票价时刻一律标注「请在官方平台实时查询」。"
+    );
   }
 
-  const results = await webSearch(query, 5);
-  if (!results.length) return `未搜到「${query}」的相关结果。`;
+  const results = await webSearch(query, 6);
+  if (!results.length) {
+    return (
+      `未搜到「${query}」的可靠结果。不要编造；请给出官方购票/查询链接，` +
+      `并标注「请在官方平台实时查询」。`
+    );
+  }
 
   return results
     .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`)
