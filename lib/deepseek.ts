@@ -66,69 +66,66 @@ export async function callDeepSeekJSON<T = unknown>(
     { role: "user", content: userPrompt },
   ];
 
-  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-    // 最后一轮强制收口：禁用工具，要求直接产出 JSON
-    const exhausted = round === MAX_TOOL_ROUNDS;
-    const body: Record<string, unknown> = {
-      model,
-      messages,
-      max_tokens: maxTokens,
-      stream: false,
-    };
-    if (useTools && !exhausted) {
-      body.tools = tools;
-      body.tool_choice = "auto";
-    } else {
-      // 收口轮 / 无工具：用 json_object 模式拿到干净 JSON
-      body.response_format = { type: "json_object" };
-    }
-
+  // 单次 chat/completions 调用
+  const chat = async (extra: Record<string, unknown>) => {
     const res = await fetch(`${BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${key}`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: maxTokens,
+        stream: false,
+        ...extra,
+      }),
     });
-
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`DeepSeek API ${res.status}: ${text}`);
+      throw new Error(`DeepSeek API ${res.status}: ${await res.text()}`);
     }
+    const data = (await res.json()) as { choices?: { message?: ChatMessage }[] };
+    return data.choices?.[0]?.message;
+  };
 
-    const data = (await res.json()) as {
-      choices?: { message?: ChatMessage; finish_reason?: string }[];
-    };
-    const msg = data.choices?.[0]?.message;
-
-    // 模型要求调用工具 → 执行后把结果回灌，继续下一轮
-    if (msg?.tool_calls?.length && opts.onToolCall && !exhausted) {
-      messages.push({
-        role: "assistant",
-        content: msg.content ?? "",
-        tool_calls: msg.tool_calls,
-      });
-      for (const tc of msg.tool_calls) {
-        const result = await opts.onToolCall(
-          tc.function.name,
-          tc.function.arguments,
-        );
+  // 第一阶段：带工具的调研循环（仅当挂了工具）。模型自行决定搜索几次。
+  // 这一阶段不开 json_object（与工具调用混用不稳定），只为收集真实搜索结果。
+  if (useTools) {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const msg = await chat({ tools, tool_choice: "auto" });
+      if (msg?.tool_calls?.length && opts.onToolCall) {
         messages.push({
-          role: "tool",
-          tool_call_id: tc.id,
-          content: result,
+          role: "assistant",
+          content: msg.content ?? "",
+          tool_calls: msg.tool_calls,
         });
+        for (const tc of msg.tool_calls) {
+          const result = await opts.onToolCall(
+            tc.function.name,
+            tc.function.arguments,
+          );
+          messages.push({ role: "tool", tool_call_id: tc.id, content: result });
+        }
+        continue;
       }
-      continue;
+      // 模型不再调工具：留下它这轮的草稿作上下文，进入收口阶段
+      if (msg?.content) messages.push({ role: "assistant", content: msg.content });
+      break;
     }
-
-    const content = msg?.content;
-    if (!content) {
-      throw new Error("DeepSeek 返回空内容（可能被 max_tokens 截断）");
-    }
-    return parseJsonLoose<T>(content);
+    messages.push({
+      role: "user",
+      content:
+        "现在基于以上搜索到的真实信息，只输出最终的 JSON 对象（严格符合 Schema），" +
+        "不要任何额外文字或代码块。未经搜索证实的具体信息不要编造。",
+    });
   }
 
-  throw new Error(`DeepSeek 工具循环超过 ${MAX_TOOL_ROUNDS} 轮仍未收口`);
+  // 第二阶段：强制 json_object 收口，保证产出干净合法 JSON（不带工具）。
+  const finalMsg = await chat({ response_format: { type: "json_object" } });
+  const content = finalMsg?.content;
+  if (!content) {
+    throw new Error("DeepSeek 返回空内容（可能被 max_tokens 截断）");
+  }
+  return parseJsonLoose<T>(content);
 }
