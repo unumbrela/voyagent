@@ -15,6 +15,8 @@ export function runValidator(ctx: AgentContext) {
       "你是出行前质检员，重点把关【真实性与可行性】。审查最终行程是否：\n" +
       "- 交通可核实：去程/返程是否给了具体班次与【购票链接】；任何看起来像编造的车次/航班/票价" +
       "（无来源、链接缺失）一律标 high；\n" +
+      "- 住宿可核实：是否给了真实酒店与【预订链接】；看起来像编造（无来源、链接缺失）的酒店标 high；" +
+      "住宿区域应贴近主要活动、动线合理，价格应与预算相符（明显超预算标 medium）；\n" +
       "- 时间自洽：去程抵达时间不晚于首日首个活动、返程出发时间不早于尾日最后活动，衔接留足缓冲；\n" +
       "- 时刻有效性（重点）：若出发日=当前日期，去程出发时间必须晚于『当前时间』，推荐已发车的班次标 high；" +
       "若指定了『去程最早出发时间』『返程最晚到达时间』，违反者标 high（去程早于最早出发、返程到达晚于最晚到达）；\n" +
@@ -23,6 +25,6 @@ export function runValidator(ctx: AgentContext) {
       "逐条列出问题（标 high/medium/low）并给改进建议。仅当无 high 级问题时 passed 设为 true。只输出结构化 JSON。",
     userPrompt:
       `行程参数：\n${contextBlock(ctx.context)}\n\n` +
-      upstreamBlock(ctx, ["hub_planner"]),
+      upstreamBlock(ctx, ["accommodation", "transport", "hub_planner"]),
   });
 }

@@ -12,12 +12,14 @@ export function runScheduling(ctx: AgentContext) {
     maxTokens: 8000,
     schema: schedulingSchema,
     system:
-      "你是行程编排专家。综合上游的活动、餐饮、目的地背景，按天数排出合理的逐日框架。" +
+      "你是行程编排专家。综合上游的活动、餐饮、住宿、目的地背景，按天数排出合理的逐日框架。" +
       "原则：同区域活动尽量同天、动静结合、三餐穿插、预留休整；" +
-      "首日考虑从出发地抵达目的地的时间（首个 transit 块为抵达/入住），尾日预留返程（最后一个 transit 块为离店/返程）。" +
+      "【以住宿为锚点】：参考 accommodation 选定的酒店区域，每天动线尽量围绕酒店就近展开、" +
+      "早出晚归回到同一住处，减少无谓往返；首日首个 transit 块为抵达/入住（写明酒店），" +
+      "尾日最后一个 transit 块为离店/返程。" +
       "每天给主题，时段块标注 activity/food/rest/transit。只输出结构化 JSON。",
     userPrompt:
       `行程参数：\n${contextBlock(ctx.context)}\n\n` +
-      upstreamBlock(ctx, ["enrichment", "activities", "food"]),
+      upstreamBlock(ctx, ["enrichment", "activities", "food", "accommodation"]),
   });
 }

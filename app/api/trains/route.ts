@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { callDeepSeekJSON, DEEPSEEK } from "@/lib/deepseek";
 import { webSearch } from "@/lib/search";
 import { railBookingUrl } from "@/lib/stations";
+import { getUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -36,6 +37,11 @@ const trainsSchema = {
 };
 
 export async function GET(req: Request) {
+  // 需登录：避免实时搜索（DeepSeek + Tavily，均计费）被匿名滥用
+  if (!(await getUser())) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const from = (searchParams.get("from") ?? "").trim();
   const to = (searchParams.get("to") ?? "").trim();

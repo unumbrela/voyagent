@@ -1,6 +1,7 @@
 import { runEnrichment } from "./enrichment";
 import { runActivities } from "./activities";
 import { runFood } from "./food";
+import { runAccommodation } from "./accommodation";
 import { runScheduling } from "./scheduling";
 import { runTransport } from "./transport";
 import { runHubPlanner } from "./hub-planner";
@@ -24,9 +25,11 @@ export const WAVES: AgentStep[][] = [
     { name: "activities", run: runActivities },
     { name: "food", run: runFood },
   ],
-  // 第 2 波：综合上游排逐日框架
+  // 第 2 波：依据活动分布选住宿区位（贴近景点、动线短）
+  [{ name: "accommodation", run: runAccommodation }],
+  // 第 3 波：综合上游（含住宿）排逐日框架，每天从酒店出发
   [{ name: "scheduling", run: runScheduling }],
-  // 第 3 波：依赖已排好的日程
+  // 第 4 波：依赖已排好的日程
   [{ name: "transport", run: runTransport }],
   // 收尾：综合成最终行程
   [{ name: "hub_planner", run: runHubPlanner }],

@@ -11,10 +11,11 @@ const AGENTS: { key: string; label: string; wave: number; search?: boolean }[] =
   { key: "enrichment", label: "目的地调研", wave: 1 },
   { key: "activities", label: "活动推荐", wave: 1, search: true },
   { key: "food", label: "餐饮指南", wave: 1 },
-  { key: "scheduling", label: "日程编排", wave: 2 },
-  { key: "transport", label: "交通物流", wave: 3, search: true },
-  { key: "hub_planner", label: "综合行程", wave: 4 },
-  { key: "validator", label: "出行质检", wave: 5 },
+  { key: "accommodation", label: "住宿推荐", wave: 2, search: true },
+  { key: "scheduling", label: "日程编排", wave: 3 },
+  { key: "transport", label: "交通物流", wave: 4, search: true },
+  { key: "hub_planner", label: "综合行程", wave: 5 },
+  { key: "validator", label: "出行质检", wave: 6 },
 ];
 
 const KINDS = ["activity", "food", "rest", "transit"];
@@ -25,6 +26,8 @@ interface ItineraryItem {
   kind: string;
   detail: string;
   est_cost: number;
+  /** 购票/预订链接（从 detail 剥离出来，单独存；不在 detail 文本里展示） */
+  booking_url?: string;
 }
 interface ItineraryDay {
   day: number;
@@ -82,7 +85,7 @@ export default function TripPage() {
         // 已完成 → 直接渲染存好的行程，不再重跑流水线（P1 幂等）
         if (data.status === "done" && Array.isArray(data.days)) {
           setTitle(`${data.destination ?? ""} 行程`.trim());
-          setDays(data.days as ItineraryDay[]);
+          setDays(normalizeDays(data.days as ItineraryDay[]));
           setReferences((data.references as Reference[]) ?? []);
           setPhase("ready");
           return;
@@ -105,7 +108,7 @@ export default function TripPage() {
             };
             setTitle(it?.title ?? "");
             setOverview(it?.overview ?? "");
-            setDays(it?.days ?? []);
+            setDays(normalizeDays(it?.days ?? []));
             setReferences(it?.references ?? []);
             setPhase("ready");
             es.close();
@@ -364,8 +367,12 @@ function ItemCard({
   onChange: (field: keyof ItineraryItem, value: string | number) => void;
   onDelete: () => void;
 }) {
-  const [searching, setSearching] = useState(false);
-  const bookingUrl = extractUrl(item.detail);
+  // null=未展开；"train"=搜车票；"flight"=搜航班
+  const [searchMode, setSearchMode] = useState<null | "train" | "flight">(null);
+  const bookingUrl = item.booking_url || extractUrl(item.detail);
+  const link = bookingMeta(item.kind); // { label, cls }
+  // 城际交通才显示搜车票/搜航班；打车/地铁/步行等本地交通不显示
+  const longHaul = item.kind === "transit" && !LOCAL_TRANSIT_RE.test(`${item.title} ${item.detail}`);
 
   return (
     <li
@@ -423,18 +430,30 @@ function ItemCard({
                 href={bookingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                className={`rounded px-2 py-0.5 font-medium text-white ${link.cls}`}
               >
-                购票/详情
+                {link.label}
               </a>
             )}
-            {item.kind === "transit" && (
-              <button
-                onClick={() => setSearching((v) => !v)}
-                className="text-emerald-700 hover:underline"
-              >
-                🔍 搜车票
-              </button>
+            {longHaul && (
+              <>
+                <button
+                  onClick={() =>
+                    setSearchMode((m) => (m === "train" ? null : "train"))
+                  }
+                  className="text-emerald-700 hover:underline"
+                >
+                  🔍 搜车票
+                </button>
+                <button
+                  onClick={() =>
+                    setSearchMode((m) => (m === "flight" ? null : "flight"))
+                  }
+                  className="text-sky-700 hover:underline"
+                >
+                  ✈️ 搜航班
+                </button>
+              </>
             )}
             <button
               onClick={onDelete}
@@ -445,18 +464,21 @@ function ItemCard({
             </button>
           </div>
 
-          {searching && item.kind === "transit" && (
-            <TrainSearch
+          {searchMode && longHaul && (
+            <TransitSearch
               meta={meta}
+              mode={searchMode}
               onPick={(t) => {
                 onChange("title", t.name);
+                // 详情只留干净信息，购票链接单独存到 booking_url（按钮跳转）
                 onChange(
                   "detail",
-                  `${t.depart} → ${t.arrive} · ${t.duration} · ${t.price_cny} · 购票 ${t.booking_url}`,
+                  `${t.depart} → ${t.arrive} · ${t.duration} · ${t.price_cny}`,
                 );
                 onChange("est_cost", parsePrice(t.price_cny));
                 onChange("kind", "transit");
-                setSearching(false);
+                onChange("booking_url", t.booking_url);
+                setSearchMode(null);
               }}
             />
           )}
@@ -466,7 +488,7 @@ function ItemCard({
   );
 }
 
-interface Train {
+interface Transit {
   name: string;
   depart: string;
   arrive: string;
@@ -474,22 +496,31 @@ interface Train {
   price_cny: string;
   booking_url: string;
   source_url: string;
+  airline?: string; // 仅航班
 }
 
-/** 高铁搜索框 + 下拉真实车次 */
-function TrainSearch({
+/** 交通换乘实时搜索：mode=train 搜真实车次 / mode=flight 搜真实航班，下拉点选替换条目 */
+function TransitSearch({
   meta,
+  mode,
   onPick,
 }: {
   meta: Meta;
-  onPick: (t: Train) => void;
+  mode: "train" | "flight";
+  onPick: (t: Transit) => void;
 }) {
   const [from, setFrom] = useState(meta.origin ?? "");
   const [to, setTo] = useState(meta.destination ?? "");
   const [date, setDate] = useState(meta.start_date ?? "");
   const [loading, setLoading] = useState(false);
-  const [trains, setTrains] = useState<Train[] | null>(null);
+  const [items, setItems] = useState<Transit[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const isFlight = mode === "flight";
+  const endpoint = isFlight ? "/api/flights" : "/api/trains";
+  const accent = isFlight
+    ? { border: "border-sky-200", bg: "bg-sky-50/50", btn: "bg-sky-600 hover:bg-sky-700", hover: "hover:border-sky-400", noun: "航班", empty: "未搜到航班" }
+    : { border: "border-emerald-200", bg: "bg-emerald-50/50", btn: "bg-emerald-600 hover:bg-emerald-700", hover: "hover:border-emerald-400", noun: "趟", empty: "未搜到车次" };
 
   async function run() {
     if (!from || !to) {
@@ -498,13 +529,13 @@ function TrainSearch({
     }
     setLoading(true);
     setErr(null);
-    setTrains(null);
+    setItems(null);
     try {
       const q = new URLSearchParams({ from, to, date });
-      const res = await fetch(`/api/trains?${q.toString()}`);
+      const res = await fetch(`${endpoint}?${q.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "搜索失败");
-      setTrains(data.trains ?? []);
+      setItems((isFlight ? data.flights : data.trains) ?? []);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -513,7 +544,7 @@ function TrainSearch({
   }
 
   return (
-    <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
+    <div className={`mt-2 rounded-lg border ${accent.border} ${accent.bg} p-2.5`}>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <input
           value={from}
@@ -537,39 +568,42 @@ function TrainSearch({
         <button
           onClick={run}
           disabled={loading}
-          className="rounded bg-emerald-600 px-2.5 py-1 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          className={`rounded px-2.5 py-1 font-medium text-white disabled:opacity-50 ${accent.btn}`}
         >
-          {loading ? "搜索中…" : "搜索"}
+          {loading ? "搜索中…" : isFlight ? "搜航班" : "搜车票"}
         </button>
       </div>
       {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
-      {trains && (
+      {items && (
         <>
-          {trains.length > 0 && (
+          {items.length > 0 && (
             <p className="mt-2 text-[11px] text-neutral-500">
-              共 {trains.length} 趟 · 滚动浏览，点选替换该条目
+              共 {items.length} {accent.noun} · 滚动浏览，点选替换该条目
             </p>
           )}
           <ul className="mt-1 max-h-80 space-y-1 overflow-y-auto pr-1">
-            {trains.length === 0 && (
-              <li className="text-xs text-neutral-500">未搜到车次</li>
+            {items.length === 0 && (
+              <li className="text-xs text-neutral-500">{accent.empty}</li>
             )}
-            {trains.map((t, i) => (
-            <li key={i}>
-              <button
-                onClick={() => onPick(t)}
-                className="w-full rounded border border-neutral-200 bg-white px-2 py-1.5 text-left text-xs hover:border-emerald-400"
-              >
-                <span className="font-medium">{t.name}</span>{" "}
-                <span className="text-neutral-600">
-                  {t.depart} → {t.arrive}
-                </span>{" "}
-                <span className="text-neutral-400">
-                  {t.duration} · {t.price_cny}
-                </span>
-              </button>
-            </li>
-          ))}
+            {items.map((t, i) => (
+              <li key={i}>
+                <button
+                  onClick={() => onPick(t)}
+                  className={`w-full rounded border border-neutral-200 bg-white px-2 py-1.5 text-left text-xs ${accent.hover}`}
+                >
+                  <span className="font-medium">{t.name}</span>
+                  {t.airline ? (
+                    <span className="text-neutral-500"> {t.airline}</span>
+                  ) : null}{" "}
+                  <span className="text-neutral-600">
+                    {t.depart} → {t.arrive}
+                  </span>{" "}
+                  <span className="text-neutral-400">
+                    {t.duration} · {t.price_cny}
+                  </span>
+                </button>
+              </li>
+            ))}
           </ul>
         </>
       )}
@@ -585,6 +619,42 @@ function extractUrl(text: string): string | null {
 function parsePrice(s: string): number {
   const m = s?.match(/\d+/);
   return m ? Number(m[0]) : 0;
+}
+
+/** 本地短途交通（不显示搜车票/搜航班） */
+const LOCAL_TRANSIT_RE =
+  /打车|出租|网约车|滴滴|地铁|公交|步行|巴士|班车|接驳|缆车|轮渡|摆渡|taxi|metro|subway|walk|bus/i;
+
+/** 按条目类别决定跳转按钮的文案与配色 */
+function bookingMeta(kind: string): { label: string; cls: string } {
+  if (kind === "transit")
+    return { label: "🎫 购票", cls: "bg-blue-600 hover:bg-blue-700" };
+  if (kind === "rest")
+    return { label: "🏨 预订", cls: "bg-rose-600 hover:bg-rose-700" };
+  return { label: "🔗 查看", cls: "bg-neutral-600 hover:bg-neutral-700" };
+}
+
+/** 把 detail 里的购票/预订 URL 剥离到 item.booking_url，detail 只留干净文字 */
+function normalizeDays(days: ItineraryDay[]): ItineraryDay[] {
+  return (days ?? []).map((d) => ({
+    ...d,
+    items: (d.items ?? []).map((it) => {
+      const url = it.booking_url || extractUrl(it.detail || "") || undefined;
+      let detail = it.detail ?? "";
+      if (url) {
+        const idx = detail.indexOf(url);
+        if (idx >= 0) {
+          const head = detail
+            .slice(0, idx)
+            .replace(/[·,，;；\s]*(购票|预订|订票|详情|链接|预定)?\s*[:：]?\s*$/, "")
+            .trim();
+          const tail = detail.slice(idx + url.length).trim();
+          detail = (head + (tail ? ` ${tail}` : "")).trim();
+        }
+      }
+      return { ...it, detail, booking_url: url };
+    }),
+  }));
 }
 
 /** 把文本里的 URL 渲染成可点击链接 */

@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/trips/[id] —— 读取已存的行程（不触发编排）。
  * 前端用它在「已完成」时直接渲染，避免每次进页面都重跑流水线（修复 P1 幂等性）。
+ * 用 cookie 客户端：RLS 保证只能读到自己的行程（他人/不存在均为 404）。
  */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const supabase = createAdminClient();
+  const supabase = await createServerSupabase();
 
   const [{ data: trip }, { data: ctx }, { data: itin }] = await Promise.all([
     supabase.from("trips").select("status").eq("id", id).single(),
@@ -61,7 +62,8 @@ export async function PUT(
     return NextResponse.json({ error: "days 必须是数组" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
+  // cookie 客户端：RLS 保证只能改自己的行程（他人行程 update 命中 0 行）
+  const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("itineraries")
     .update({

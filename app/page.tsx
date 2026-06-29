@@ -101,8 +101,8 @@ export default function Home() {
     <main className="mx-auto w-full max-w-xl px-6 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">智能旅行规划</h1>
       <p className="mt-2 text-sm text-neutral-500">
-        7 个专家 agent 协作（orchestrator-worker 架构）：调研 · 活动 · 美食 · 日程 ·
-        交通 · 综合 · 质检。
+        8 个专家 agent 协作（orchestrator-worker 架构）：调研 · 活动 · 美食 · 住宿 ·
+        日程 · 交通 · 综合 · 质检。
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-5">

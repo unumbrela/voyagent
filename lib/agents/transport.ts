@@ -3,6 +3,7 @@ import { runAgent } from "./runAgent";
 import { transportSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import { railBookingUrl } from "@/lib/stations";
+import { flightBookingUrl } from "@/lib/airports";
 import type { AgentContext, TripContext } from "./types";
 
 interface TransportOption {
@@ -64,10 +65,13 @@ function enforceTimeWindows(payload: TransportPayload, c: TripContext): void {
 
 const isRail = (mode?: string) =>
   !!mode && /高铁|动车|火车|城际|动卧|普速|快速|列车/.test(mode);
+const isAir = (mode?: string) =>
+  !!mode && /飞机|航班|班机|空运|航空|flight/i.test(mode);
 
 /**
- * 把铁路 options 的 booking_url 覆盖成 12306 直达深链（线路+日期的余票查询页，
- * 登录即可购票），用权威车站码确定性生成，不依赖模型给的链接。
+ * 把交通 options 的 booking_url 覆盖成确定性真实深链，不依赖模型给的链接：
+ *  - 铁路 → 12306 线路+日期的余票查询页（权威车站码，stations.ts）
+ *  - 航班 → 携程单程列表 / Google Flights 深链（airports.ts）
  */
 async function applyBookingLinks(
   payload: TransportPayload,
@@ -80,11 +84,13 @@ async function applyBookingLinks(
   ];
   for (const { leg, from, to, date } of legs) {
     if (!leg?.options?.length || !from || !to) continue;
-    let url: string | null = null;
+    let railUrl: string | null = null;
     for (const o of leg.options) {
       if (isRail(o.mode)) {
-        url ??= await railBookingUrl(from, to, date);
-        o.booking_url = url;
+        railUrl ??= await railBookingUrl(from, to, date);
+        o.booking_url = railUrl;
+      } else if (isAir(o.mode)) {
+        o.booking_url = flightBookingUrl(from, to, date);
       }
     }
   }

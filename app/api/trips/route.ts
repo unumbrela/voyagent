@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -17,12 +17,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "缺少 destination" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
+  // 以登录用户身份写入：RLS 要求 user_id = auth.uid()
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
 
-  // 当前脚手架未接入认证：user_id 暂为 null（服务端用 service_role 绕过 RLS）
   const { data: trip, error: tripErr } = await supabase
     .from("trips")
-    .insert({ status: "draft" })
+    .insert({ status: "draft", user_id: user.id })
     .select("id")
     .single();
   if (tripErr || !trip) {

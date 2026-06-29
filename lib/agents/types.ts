@@ -22,6 +22,7 @@ export type AgentName =
   | "enrichment"
   | "activities"
   | "food"
+  | "accommodation"
   | "scheduling"
   | "transport"
   | "hub_planner"

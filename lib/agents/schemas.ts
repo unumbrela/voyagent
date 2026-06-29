@@ -59,6 +59,25 @@ export const foodSchema = obj({
   },
 });
 
+// ── accommodation：住宿 ──
+// 每家酒店都要可核实：来源链接 + 真实预订深链；未搜到则标"实时查询"、不得编造。
+const accommodationOption = obj({
+  name: str, // 真实酒店名；未搜到填 "见预订链接"
+  type: str, // 酒店/民宿/青旅/公寓
+  area: str, // 所在区域/商圈，注明靠近哪些景点或交通枢纽
+  price_per_night_cny: str, // 每晚价或区间（人民币），以平台实时为准；未知填 "实时查询"
+  rating: str, // 评分/星级（来自搜索）；未知填 ""
+  why: str, // 推荐理由：位置/性价比/契合风格
+  booking_url: str, // 预订深链（由后端确定性覆盖为真实房态链接）
+  source_url: str, // 信息来源链接（来自搜索结果）；未搜到填 ""
+});
+
+export const accommodationSchema = obj({
+  recommended: str, // 一句话首选：选哪家、为何（位置/预算/契合度）
+  area_advice: str, // 选区建议：结合活动分布说明住哪个区域动线最短
+  options: { type: "array", items: accommodationOption }, // 2~4 家真实可选
+});
+
 // ── scheduling：逐日行程框架 ──
 export const schedulingSchema = obj({
   days: {

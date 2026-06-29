@@ -1,4 +1,7 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import {
+  createAdminClient,
+  createServerSupabase,
+} from "@/lib/supabase/server";
 import { runPipeline } from "@/lib/pipeline";
 import type { ProgressEvent, TripContext } from "@/lib/agents/types";
 
@@ -15,19 +18,27 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: tripId } = await params;
-  const supabase = createAdminClient();
 
-  const { data: ctx, error } = await supabase
+  // 先以登录用户身份读取（RLS）：读得到 = 拥有该行程；否则 401/404。
+  const userClient = await createServerSupabase();
+  const {
+    data: { user },
+  } = await userClient.auth.getUser();
+  if (!user) {
+    return new Response("未登录", { status: 401 });
+  }
+  const { data: ctx, error } = await userClient
     .from("trip_context")
     .select("*")
     .eq("trip_id", tripId)
     .single();
 
   if (error || !ctx) {
-    return new Response(`未找到 trip_context: ${error?.message ?? tripId}`, {
-      status: 404,
-    });
+    return new Response(`未找到行程或无权访问: ${tripId}`, { status: 404 });
   }
+
+  // 归属已确认；编排用 admin 客户端写 agent_outputs/itineraries（受信任的服务端流程）
+  const supabase = createAdminClient();
 
   const constraints = (ctx.constraints ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v ? v : null);
