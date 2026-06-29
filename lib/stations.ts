@@ -73,8 +73,9 @@ export async function railBookingUrl(
   const from = await lookupStation(fromCity);
   const to = await lookupStation(toCity);
   if (!from || !to) return "https://www.12306.cn";
-  const fs = encodeURIComponent(`${from.name},${from.code}`);
-  const ts = encodeURIComponent(`${to.name},${to.code}`);
+  // 12306 预填要求「中文名,电报码」——只编码中文名，逗号保持字面，否则 %2C 会让其无法切分
+  const fs = `${encodeURIComponent(from.name)},${from.code}`;
+  const ts = `${encodeURIComponent(to.name)},${to.code}`;
   const dateParam = date ? `&date=${date}` : "";
   return (
     `https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc` +

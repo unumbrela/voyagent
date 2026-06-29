@@ -12,14 +12,20 @@ export interface SearchResult {
   title: string;
   url: string;
   content: string;
+  /** 整页清洗后的原文（仅 includeRaw 时有）；用于提取完整时刻表等长内容 */
+  raw?: string;
 }
 
 const TAVILY_URL = "https://api.tavily.com/search";
 
-/** 执行一次 web 搜索；无 key 时返回空数组（由调用方决定如何降级） */
+/**
+ * 执行一次 web 搜索；无 key 时返回空数组（由调用方决定如何降级）。
+ * includeRaw=true 时请求整页原文（车次时刻表这类需要完整列表的场景用）。
+ */
 export async function webSearch(
   query: string,
   maxResults = 5,
+  includeRaw = false,
 ): Promise<SearchResult[]> {
   const key = process.env.TAVILY_API_KEY;
   if (!key) return [];
@@ -31,7 +37,8 @@ export async function webSearch(
       api_key: key,
       query,
       max_results: maxResults,
-      search_depth: "basic",
+      search_depth: includeRaw ? "advanced" : "basic",
+      include_raw_content: includeRaw,
     }),
   });
 
@@ -41,12 +48,18 @@ export async function webSearch(
   }
 
   const data = (await res.json()) as {
-    results?: { title?: string; url?: string; content?: string }[];
+    results?: {
+      title?: string;
+      url?: string;
+      content?: string;
+      raw_content?: string;
+    }[];
   };
   return (data.results ?? []).map((r) => ({
     title: r.title ?? "",
     url: r.url ?? "",
     content: r.content ?? "",
+    raw: r.raw_content ?? undefined,
   }));
 }
 

@@ -428,12 +428,14 @@ function ItemCard({
                 购票/详情
               </a>
             )}
-            <button
-              onClick={() => setSearching((v) => !v)}
-              className="text-emerald-700 hover:underline"
-            >
-              🔍 搜车票
-            </button>
+            {item.kind === "transit" && (
+              <button
+                onClick={() => setSearching((v) => !v)}
+                className="text-emerald-700 hover:underline"
+              >
+                🔍 搜车票
+              </button>
+            )}
             <button
               onClick={onDelete}
               className="ml-auto text-neutral-400 hover:text-red-600"
@@ -443,7 +445,7 @@ function ItemCard({
             </button>
           </div>
 
-          {searching && (
+          {searching && item.kind === "transit" && (
             <TrainSearch
               meta={meta}
               onPick={(t) => {
@@ -542,11 +544,17 @@ function TrainSearch({
       </div>
       {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
       {trains && (
-        <ul className="mt-2 max-h-60 space-y-1 overflow-auto">
-          {trains.length === 0 && (
-            <li className="text-xs text-neutral-500">未搜到车次</li>
+        <>
+          {trains.length > 0 && (
+            <p className="mt-2 text-[11px] text-neutral-500">
+              共 {trains.length} 趟 · 滚动浏览，点选替换该条目
+            </p>
           )}
-          {trains.map((t, i) => (
+          <ul className="mt-1 max-h-80 space-y-1 overflow-y-auto pr-1">
+            {trains.length === 0 && (
+              <li className="text-xs text-neutral-500">未搜到车次</li>
+            )}
+            {trains.map((t, i) => (
             <li key={i}>
               <button
                 onClick={() => onPick(t)}
@@ -562,7 +570,8 @@ function TrainSearch({
               </button>
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
     </div>
   );

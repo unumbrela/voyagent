@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { callDeepSeekJSON, DEEPSEEK } from "@/lib/deepseek";
-import { WEB_SEARCH_TOOL, runWebSearchTool } from "@/lib/search";
+import { webSearch } from "@/lib/search";
 import { railBookingUrl } from "@/lib/stations";
 
 export const runtime = "nodejs";
@@ -45,6 +45,22 @@ export async function GET(req: Request) {
   }
 
   try {
+    // 1) 抓取时刻表页【整页原文】（含全天车次），而不是只拿摘要
+    const results = await webSearch(
+      `${from}到${to} 高铁 动车 时刻表 全部车次 票价`,
+      5,
+      true,
+    );
+    const corpus = results
+      .map((r) => `【来源 ${r.url}】\n${r.raw || r.content}`)
+      .join("\n\n")
+      .slice(0, 18000); // 控制上下文长度
+
+    if (!corpus.trim()) {
+      return NextResponse.json({ trains: [] });
+    }
+
+    // 2) 从整页时刻表里提取【所有】车次（无工具，直接 json_object 收口）
     const result = await callDeepSeekJSON<{
       trains: {
         name: string;
@@ -57,15 +73,14 @@ export async function GET(req: Request) {
       }[];
     }>({
       model: DEEPSEEK.chat,
-      maxTokens: 4000,
+      maxTokens: 8000,
       schema: trainsSchema,
       system:
-        "你是车票查询助手，对真实性负责。用 web_search 搜【出发地→目的地】在指定日期的" +
-        "真实高铁/动车车次，返回 6~10 个真实存在的车次：车次号、出发站+时间、到达站+时间、" +
-        "时长、票价区间、source_url（搜索来源）。绝不编造；搜不到就少返回几个。按出发时间排序。",
-      userPrompt: `出发地：${from}\n到达地：${to}\n日期：${date ?? "未指定"}`,
-      tools: [WEB_SEARCH_TOOL],
-      onToolCall: (_n, args) => runWebSearchTool(args),
+        `你是车票时刻表解析助手。下面是若干来源页面的原文，包含 ${from}→${to} 的高铁/动车时刻表。` +
+        "请把其中出现的【所有】该线路车次【完整提取】出来（一条繁忙线路通常 20~40 趟，不要只给几趟），" +
+        "每趟填：车次号、出发站+时间、到达站+时间、时长、票价区间、source_url（取自对应【来源】行的链接）。" +
+        "按出发时间从早到晚排序、去重。只提取原文里真实出现的车次，不要编造；票价/余票以 12306 实时为准。",
+      userPrompt: `线路：${from} → ${to}，日期：${date ?? "未指定"}\n\n时刻表原文：\n${corpus}`,
     });
 
     const booking = await railBookingUrl(from, to, date);
