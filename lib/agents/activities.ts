@@ -1,0 +1,20 @@
+import { MODELS } from "@/lib/anthropic";
+import { runAgent } from "./runAgent";
+import { activitiesSchema } from "./schemas";
+import { contextBlock } from "./prompt";
+import type { AgentContext } from "./types";
+
+/** Activities：景点/活动推荐（质量敏感，用 Opus + web 搜索） */
+export function runActivities(ctx: AgentContext) {
+  return runAgent({
+    model: MODELS.opus,
+    effort: "high",
+    useWebSearch: true,
+    schema: activitiesSchema,
+    system:
+      "你是活动策划专家。根据目的地、旅行风格、预算和人数，挑选 8~15 个值得做的活动/景点。" +
+      "覆盖不同类别与区域，给出推荐理由、估算花费与时长。用 web 搜索确保景点真实、未关闭。" +
+      "只输出结构化 JSON。",
+    userPrompt: `请为以下行程推荐活动：\n\n${contextBlock(ctx.context)}`,
+  });
+}
