@@ -51,6 +51,8 @@ export interface ProgressEvent {
   agent?: AgentName;
   status?: "running" | "done" | "error";
   message?: string;
+  /** agent 完成时的一句产物摘要（等待页渐进呈现用），见 lib/agents/summarize.ts */
+  summary?: string;
   /** done 时携带最终行程 */
   itinerary?: unknown;
 }

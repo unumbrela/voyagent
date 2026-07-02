@@ -1,28 +1,611 @@
 @import "tailwindcss";
 
+/* ══════════════════════════════════════════════════════════════
+   「旅行志 / Travel Atlas」编辑风设计系统
+   冷色制图纸 · 墨蓝正文 · 青瓷主色 · 印章红微点缀
+   Fraunces 衬线大标题 · Geist Mono 承载时刻/票价等数据
+   ══════════════════════════════════════════════════════════════ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* 表面（正文工作区：微暖纸白，不再是死灰） */
+  --canvas: #f7f6f3;
+  --surface: #ffffff; /* 卡片 */
+  --surface-2: #f1f0ec; /* 次级面 / 输入底 */
+  --ink: #151c2c; /* 主文字（墨蓝） */
+  --muted: #66707f; /* 次要文字 */
+  --line: #e7e5df; /* 分割线/描边 */
+  --line-strong: #d3d0c8;
+
+  /* 暮色段（hero / 登录 / 行程刊头）：深蓝夜空 + 极光 */
+  --night-1: #0b1124;
+  --night-2: #17204b;
+  --night-ink: #eef1fb; /* 夜空上的正文白 */
+  --night-muted: #9aa5c8;
+  --aurora-teal: #2fd4c6;
+  --aurora-violet: #7c6bff;
+  --aurora-amber: #ffb45e;
+
+  /* 品牌青瓷（主操作色；白底上对比达标） */
+  --arc-blue: #0f8b8b; /* 沿用旧变量名，全站 text-arc-blue/bg-arc-blue 即主色 */
+  --arc-blue-600: #0b6e6e;
+  --teal: #0f8b8b;
+  --teal-dark: #0b6e6e;
+  --teal-tint: #e7f4f4; /* 主色浅底（选中/高亮） */
+
+  /* 印章红：旅行印章/邮戳意象，仅微量点缀（已核实印章、hero 下划） */
+  --seal: #c5482f;
+  --seal-tint: #faeae6;
+
+  /* 类别配色（地图 / 预算 / 条目左边条）— 与 lib/budget.ts 对齐 */
+  --c-activity: #6366f1; /* 活动 · 靛蓝 */
+  --c-food: #f97316; /* 餐饮 · 橙 */
+  --c-rest: #10b981; /* 住宿 · 绿 */
+  --c-transit: #3b82f6; /* 交通 · 蓝 */
+  --c-other: #9ca3af; /* 其他 · 灰 */
+
+  /* 语义/兼容旧变量 */
+  --background: var(--canvas);
+  --foreground: var(--ink);
+
+  /* 圆角（Wanderlog 偏小） */
+  --radius-card: 12px;
+  --radius-lg: 10px;
+  --radius-md: 8px;
+  --radius-pill: 999px;
+
+  /* 极轻投影（Wanderlog 卡片近乎平面，只靠描边 + 一点悬浮） */
+  --shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-lift: 0 4px 12px -2px rgba(16, 24, 40, 0.1),
+    0 2px 6px -2px rgba(16, 24, 40, 0.06);
 }
 
 @theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-teal: var(--teal);
+  --color-teal-dark: var(--teal-dark);
+  --color-teal-tint: var(--teal-tint);
+  --color-arc-blue: var(--arc-blue);
+  --color-seal: var(--seal);
+  --color-seal-tint: var(--seal-tint);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --radius-card: var(--radius-card);
+  --radius-lg: var(--radius-lg);
+  --radius-md: var(--radius-md);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-lift: var(--shadow-lift);
+
+  /* 字体：Fraunces(西文衬线) + 思源宋体(中文衬线) 混排大标题 / Hanken UI / Geist 正文+Mono 数据 */
+  --font-display: var(--font-hanken), var(--font-geist-sans), system-ui,
+    sans-serif;
+  --font-serif: var(--font-fraunces), var(--font-noto-serif), "Noto Serif SC",
+    "Source Han Serif SC", Georgia, serif;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html {
+  background: var(--canvas);
+}
+/* 锚点跳转平滑滚动（尊重减少动效偏好） */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  /* 建立层叠上下文：让 ::before 纹理层（z-index:-1）画在本背景之上、内容之下 */
+  isolation: isolate;
+  /* 暖纸底 + 顶部一缕清晨青光 + 细噪点：告别死灰 */
+  background:
+    radial-gradient(
+      1100px 480px at 18% -8%,
+      color-mix(in srgb, var(--teal) 7%, transparent),
+      transparent 65%
+    ),
+    radial-gradient(
+      900px 420px at 92% -12%,
+      color-mix(in srgb, var(--aurora-amber) 6%, transparent),
+      transparent 60%
+    ),
+    var(--canvas);
+  background-attachment: fixed;
+}
+
+/* 正文氛围层（fixed，内容之下）：细噪点 + 极淡等高线（制图母题），告别纯白 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560'%3E%3Cg fill='none' stroke='%23151c2c' stroke-opacity='0.08' stroke-width='1.2'%3E%3Cpath d='M-20 120c90-52 180-14 260-42s140-70 250-52 210 82 300 40'/%3E%3Cpath d='M-20 210c100-44 190 8 280-24s130-62 240-44 220 66 290 34'/%3E%3Cpath d='M-20 320c80-36 200-6 290-38s120-52 230-36 230 58 290 28'/%3E%3Cpath d='M-20 430c110-40 180 12 270-20s150-58 250-40 210 54 290 26'/%3E%3Cpath d='M-20 530c90-32 200 2 290-28s130-46 240-32 220 48 290 22'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* UI 小标题：干净 grotesk */
+.font-display {
+  font-family: var(--font-hanken), var(--font-geist-sans), system-ui,
+    sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* 编辑部大标题：Fraunces 衬线（hero / 章节题 / 日头大数字 / 预算大数字） */
+.font-serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+  font-feature-settings: "ss01" on;
+}
+
+/* 数据体：等宽 + 表格数字（时刻 / 票价 / 车次号 / 倒计时 / 坐标） */
+.font-data {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* 眉题：章节上方的小号间隔字标（编辑部版式的结构语汇） */
+.ed-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--teal-dark);
+}
+.ed-eyebrow::before {
+  content: "";
+  width: 1.25rem;
+  height: 1px;
+  background: var(--teal);
+}
+
+/* 统一键盘焦点：teal 双环（无障碍） */
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── 签名元素：登机牌式票根（transit 条目专用） ──
+   两侧半圆打孔 + 打孔间虚线，登机牌质感由 mono 数据区完成 */
+.ticket {
+  --notch: 9px;
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  -webkit-mask: radial-gradient(
+        circle var(--notch) at left 50%,
+        transparent 98%,
+        #000
+      )
+      left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at right 50%, transparent 98%, #000)
+      right / 51% 100% no-repeat;
+  mask: radial-gradient(circle var(--notch) at left 50%, transparent 98%, #000)
+      left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at right 50%, transparent 98%, #000)
+      right / 51% 100% no-repeat;
+}
+.ticket-divider {
+  border: none;
+  border-top: 1.5px dashed var(--line-strong);
+  margin: 0 var(--notch);
+}
+
+/* ── 邮戳式印章（「已核实」证据徽章 / 完成标记） ── */
+.seal-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border: 1.5px solid var(--seal);
+  border-radius: 4px;
+  color: var(--seal);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  transform: rotate(-2deg);
+  background: color-mix(in srgb, var(--seal) 4%, transparent);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   暮色段（night）：深蓝夜空 + 极光光晕 + 星点 + 噪点
+   用于 落地页 hero / 登录页 / 行程刊头 / 分享页头
+   可选影像层：public/bg/hero.jpg 存在时自动垫底（404 则纯渐变，安全降级）
+   ══════════════════════════════════════════════════════════════ */
+.night {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--night-ink);
+  /* 遮罩尽量轻：只在文字区（上部偏左）和底部过渡处压暗，让照片透出来 */
+  background:
+    linear-gradient(
+      175deg,
+      color-mix(in srgb, var(--night-1) 30%, transparent),
+      color-mix(in srgb, var(--night-1) 42%, transparent) 55%,
+      color-mix(in srgb, var(--night-1) 82%, transparent)
+    ),
+    var(--night-img, none),
+    linear-gradient(160deg, var(--night-2), var(--night-1) 70%);
+  background-size: cover;
+  background-position: center;
+}
+/* 极光：两团大光晕缓慢漂移 */
+.night::before,
+.night::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 60rem;
+  height: 60rem;
+  border-radius: 999px;
+  filter: blur(70px);
+  pointer-events: none;
+}
+.night::before {
+  top: -34rem;
+  left: -12rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--aurora-teal) 16%, transparent),
+    transparent 70%
+  );
+  animation: aurora-a 26s ease-in-out infinite alternate;
+}
+.night::after {
+  top: -30rem;
+  right: -18rem;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--aurora-violet) 14%, transparent),
+    transparent 70%
+  );
+  animation: aurora-b 32s ease-in-out infinite alternate;
+}
+@keyframes aurora-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(9rem, 5rem, 0) scale(1.15);
+  }
+}
+@keyframes aurora-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+  to {
+    transform: translate3d(-8rem, 6rem, 0) scale(0.95);
+  }
+}
+/* 星点：两层稀疏光点 */
+.night-stars {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.2px 1.2px at 12% 22%, rgba(255, 255, 255, 0.8), transparent),
+    radial-gradient(1px 1px at 32% 8%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1.4px 1.4px at 55% 16%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 71% 6%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.2px 1.2px at 84% 24%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1px 1px at 92% 12%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 44% 30%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1.3px 1.3px at 6% 9%, rgba(255, 255, 255, 0.6), transparent);
+}
+
+/* 玻璃卡（暮色段上用） */
+.glass {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 40px -12px rgba(4, 10, 30, 0.55);
+}
+.glass-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--night-ink);
+}
+.glass-input::placeholder {
+  color: var(--night-muted);
+}
+.glass-input:focus {
+  border-color: var(--aurora-teal);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--aurora-teal) 22%, transparent);
+}
+
+/* 发光主按钮（hero CTA / 暮色段）：hover 时一道流光扫过 */
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #19b8a8, #0d8f83);
+  color: #fff;
+  box-shadow:
+    0 8px 28px -6px rgba(23, 190, 172, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.btn-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.6s ease;
+  pointer-events: none;
+}
+.btn-glow:hover {
+  transform: translateY(-1.5px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 12px 34px -6px rgba(23, 190, 172, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.btn-glow:hover::after {
+  transform: translateX(120%);
+}
+
+/* 光斑：浅色正文区的柔和色晕（极光在白昼的回响），缓慢漂移 */
+.glow-spot {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: -1;
+  animation: spot-drift 22s ease-in-out infinite alternate;
+}
+.glow-spot--teal {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--teal) 22%, transparent),
+    transparent 70%
+  );
+}
+.glow-spot--violet {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--aurora-violet) 17%, transparent),
+    transparent 70%
+  );
+}
+.glow-spot--amber {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--aurora-amber) 20%, transparent),
+    transparent 70%
+  );
+}
+@keyframes spot-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(3rem, 2rem, 0) scale(1.12);
+  }
+}
+
+/* ── 数字人（CopilotDock）── */
+/* 星点闪烁 */
+@keyframes dh-twinkle {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+.dh-tw {
+  animation: dh-twinkle 3.4s ease-in-out infinite;
+}
+/* 说话声浪条 */
+@keyframes dh-eq {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.dh-eqbar {
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--aurora-teal);
+  transform-origin: bottom;
+  animation: dh-eq 0.9s ease-in-out infinite;
+}
+
+/* 暮色段 → 浅色正文的弧形过渡 */
+.night-curve {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 3.5rem;
+  background: var(--canvas);
+  border-radius: 100% 100% 0 0 / 200% 200% 0 0;
+}
+
+/* 浅色区卡片 hover 微倾斜（透视浮起） */
+.tilt-card {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.tilt-card:hover {
+  transform: perspective(900px) rotateX(1.6deg) translateY(-4px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* ── 骨架屏微光 ── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.7),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Wanderlog 组件级工具类
+   ══════════════════════════════════════════════════════════════ */
+
+/* 章节锚点：给 sticky 顶栏留出偏移，scrollspy 跳转不被遮挡 */
+.wl-section {
+  scroll-margin-top: 5rem;
+}
+
+/* 地点卡：白底 · 细描边 · 极轻投影 · hover 抬升（Wanderlog place card） */
+.wl-place-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.wl-place-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-lift);
+}
+
+/* 编号圆针：颜色由内联 --c 提供（对应地图针），与逐日行程序号一致 */
+.wl-pin {
+  --c: var(--teal);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.22);
+}
+
+/* 缩略图占位块：类别色柔和底 + emoji（无真实照片源时用） */
+.wl-thumb {
+  --c: var(--teal);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--c) 14%, #fff);
+  color: var(--c);
+  font-size: 20px;
+}
+
+/* "添加地点" 搜索样式输入条（Wanderlog add-a-place bar） */
+.wl-addbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 0.5rem 0.875rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.wl-addbar:focus-within {
+  border-color: var(--teal);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent);
+}
+.wl-addbar input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--ink);
+}
+
+/* 左侧章节导航项 + 高亮当前章节 */
+.wl-sidenav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-left: 2px solid transparent;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted);
+  transition: color 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease;
+  cursor: pointer;
+}
+.wl-sidenav-link:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.wl-sidenav-link--active {
+  border-left-color: var(--teal);
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+  font-weight: 600;
+}
+.wl-sidenav-sub {
+  padding-left: 1.5rem;
+  font-size: 0.8125rem;
 }
 
 /* ── 行程地图：自定义水滴标记 ── */
@@ -67,6 +650,30 @@ body {
   to {
     stroke-dashoffset: -11;
   }
+}
+
+/* 落地页演示地图：针脚掉落进场 / 列表联动高亮 / 悬浮提示 */
+.tp-pin.tp-drop {
+  animation: tp-drop 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes tp-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.4);
+  }
+}
+.tp-pin.tp-hot {
+  transform: scale(1.22);
+}
+.leaflet-tooltip.tp-tip {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lift);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
 }
 
 /* 弹窗样式 */
@@ -115,4 +722,69 @@ body {
 }
 .leaflet-container {
   font: inherit;
+}
+
+/* ── 打印 / 存 PDF：「旅行手册」版式——刊头封面条 + 每日分页 + 票根/预算/打包 ── */
+@media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+  /* 隐藏导航、按钮、地图、编辑/搜索控件等非内容元素 */
+  nav,
+  .no-print,
+  .wl-sidenav,
+  button,
+  select,
+  .tp-rail,
+  .tp-beam,
+  .tp-node-glow,
+  .skeleton,
+  .leaflet-container {
+    display: none !important;
+  }
+  /* 卡片投影在纸上是脏灰底：全部去掉，靠描边分区 */
+  * {
+    box-shadow: none !important;
+  }
+  /* 票根：mask 打孔在部分打印引擎下不可靠，退化为虚线边票据 */
+  .ticket {
+    -webkit-mask: none !important;
+    mask: none !important;
+    border: 1px dashed var(--line-strong) !important;
+  }
+  /* 每天从新页开始（首日除外），手册按天翻页 */
+  .trip-day + .trip-day {
+    break-before: page;
+  }
+  /* 时间轴左侧导轨槽在打印时塌缩，条目按纯文本平铺 */
+  .trip-day .pl-24 {
+    padding-left: 0 !important;
+  }
+  /* 编辑用的 input/textarea 在打印时按纯文本呈现（去边框、自适应高度） */
+  input,
+  textarea {
+    border: none !important;
+    resize: none !important;
+    padding: 0 !important;
+    color: #111 !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  /* 每天卡片尽量不跨页断开 */
+  .trip-day {
+    break-inside: avoid;
+  }
+  a {
+    text-decoration: none !important;
+    color: #111 !important;
+  }
+  /* 打印时右侧地图栏折叠 */
+  .wl-maprail {
+    display: none !important;
+  }
+  .wl-content {
+    max-width: none !important;
+  }
 }

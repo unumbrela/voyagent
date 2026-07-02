@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Compass } from "@/app/ui/icons";
 
 type Mode = "signin" | "signup";
 
@@ -64,79 +65,101 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-sm px-6 py-20">
-      <h1 className="text-2xl font-semibold tracking-tight">智能旅行规划</h1>
-      <p className="mt-2 text-sm text-neutral-500">
-        {mode === "signin" ? "登录以查看和管理你的行程" : "注册一个新账号"}
-      </p>
-
-      <button
-        type="button"
-        onClick={signInWithGoogle}
-        className="mt-8 flex w-full items-center justify-center gap-2.5 rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:border-neutral-900"
-      >
-        <GoogleIcon />
-        使用 Google 继续
-      </button>
-
-      <div className="my-5 flex items-center gap-3 text-xs text-neutral-400">
-        <span className="h-px flex-1 bg-neutral-200" />
-        或用邮箱
-        <span className="h-px flex-1 bg-neutral-200" />
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-4">
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-neutral-700">
-            邮箱
+    <main
+      className="night flex min-h-screen items-center justify-center px-6 py-16"
+      style={{ "--night-img": "url(/bg/login.jpg)" } as React.CSSProperties}
+    >
+      <div className="night-stars" aria-hidden />
+      <div className="w-full max-w-sm">
+        <div className="mb-7 flex flex-col items-center text-center">
+          <span className="btn-glow grid h-13 w-13 place-items-center rounded-2xl p-3">
+            <Compass className="h-6 w-6" aria-hidden />
           </span>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className={inputCls}
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-neutral-700">
-            密码
-          </span>
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="至少 6 位"
-            className={inputCls}
-          />
-        </label>
+          <h1 className="font-serif mt-5 text-[1.7rem] font-black tracking-tight text-white">
+            {mode === "signin" ? "欢迎回来" : "创建你的账号"}
+          </h1>
+          <p className="mt-1.5 text-sm" style={{ color: "var(--night-muted)" }}>
+            {mode === "signin" ? "登录以查看和管理你的行程" : "注册后即可开始规划旅行"}
+          </p>
+        </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {notice && <p className="text-sm text-emerald-600">{notice}</p>}
+        <div className="glass p-6 sm:p-7">
+          <button
+            type="button"
+            onClick={signInWithGoogle}
+            className="glass-input flex w-full items-center justify-center gap-2.5 rounded-lg px-4 py-2.5 text-sm font-medium transition hover:bg-white/[0.14] cursor-pointer"
+          >
+            <GoogleIcon />
+            使用 Google 继续
+          </button>
+
+          <div
+            className="my-5 flex items-center gap-3 text-xs"
+            style={{ color: "var(--night-muted)" }}
+          >
+            <span className="h-px flex-1 bg-white/15" />
+            或用邮箱
+            <span className="h-px flex-1 bg-white/15" />
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-4">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-white/85">
+                邮箱
+              </span>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className={inputCls}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-white/85">
+                密码
+              </span>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="至少 6 位"
+                className={inputCls}
+              />
+            </label>
+
+            {error && <p className="text-sm text-[#ff9b8a]">{error}</p>}
+            {notice && (
+              <p className="text-sm" style={{ color: "var(--aurora-teal)" }}>
+                {notice}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-glow w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? "处理中…" : mode === "signin" ? "登录" : "注册"}
+            </button>
+          </form>
+        </div>
 
         <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          type="button"
+          onClick={() => {
+            setMode(mode === "signin" ? "signup" : "signin");
+            setError(null);
+            setNotice(null);
+          }}
+          className="mt-5 block w-full text-center text-sm text-white/60 transition hover:text-white cursor-pointer"
         >
-          {loading ? "处理中…" : mode === "signin" ? "登录" : "注册"}
+          {mode === "signin" ? "没有账号？去注册" : "已有账号？去登录"}
         </button>
-      </form>
-
-      <button
-        type="button"
-        onClick={() => {
-          setMode(mode === "signin" ? "signup" : "signin");
-          setError(null);
-          setNotice(null);
-        }}
-        className="mt-4 text-sm text-neutral-500 hover:text-neutral-900"
-      >
-        {mode === "signin" ? "没有账号？去注册" : "已有账号？去登录"}
-      </button>
+      </div>
     </main>
   );
 }
@@ -150,7 +173,7 @@ export default function LoginPage() {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900";
+  "glass-input w-full rounded-lg px-3 py-2.5 text-sm outline-none transition";
 
 /** Google 多色「G」图标 */
 function GoogleIcon() {

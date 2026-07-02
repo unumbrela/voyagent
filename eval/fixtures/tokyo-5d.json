@@ -1,0 +1,233 @@
+{
+  "itinerary": {
+    "title": "东京 5 日：美食与文化的从容漫游",
+    "overview": "以浅草—上野—银座—涩谷—台场为轴，动线由东向西，节奏轻松，穿插地道美食。",
+    "days": [
+      {
+        "day": 1,
+        "date": "2026-09-01",
+        "theme": "抵达与浅草老城",
+        "items": [
+          {
+            "time": "09:20",
+            "title": "购票出发：北京 → 东京",
+            "kind": "transit",
+            "detail": "国航 CA167 北京首都 09:20 → 东京成田 13:40，约4h20m，¥2600 起",
+            "est_cost": 2600,
+            "booking_url": "https://flights.ctrip.com/online/list/oneway-bjs-tyo?depdate=2026-09-01"
+          },
+          {
+            "time": "16:00",
+            "title": "浅草寺与仲见世通",
+            "kind": "activity",
+            "detail": "雷门、参道小吃，黄昏光线适合拍照。",
+            "est_cost": 0
+          },
+          {
+            "time": "19:00",
+            "title": "浅草老店天妇罗",
+            "kind": "food",
+            "detail": "大黑家天妇罗，江户风味。",
+            "est_cost": 180
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "date": "2026-09-02",
+        "theme": "上野博物馆群",
+        "items": [
+          {
+            "time": "10:00",
+            "title": "东京国立博物馆",
+            "kind": "activity",
+            "detail": "日本最大馆藏，建议 2.5 小时。",
+            "est_cost": 60
+          },
+          {
+            "time": "13:00",
+            "title": "上野阿美横丁午餐",
+            "kind": "food",
+            "detail": "海鲜盖饭与街头小吃。",
+            "est_cost": 120
+          },
+          {
+            "time": "15:30",
+            "title": "上野恩赐公园散步",
+            "kind": "activity",
+            "detail": "不忍池、清水观音堂。",
+            "est_cost": 0
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "date": "2026-09-03",
+        "theme": "银座与筑地",
+        "items": [
+          {
+            "time": "09:00",
+            "title": "筑地场外市场",
+            "kind": "food",
+            "detail": "玉子烧、金枪鱼寿司早餐。",
+            "est_cost": 160
+          },
+          {
+            "time": "13:00",
+            "title": "银座漫步与选物",
+            "kind": "activity",
+            "detail": "伊东屋、无印良品旗舰店。",
+            "est_cost": 300
+          },
+          {
+            "time": "19:00",
+            "title": "银座居酒屋晚餐",
+            "kind": "food",
+            "detail": "串烧与清酒。",
+            "est_cost": 260
+          }
+        ]
+      },
+      {
+        "day": 4,
+        "date": "2026-09-04",
+        "theme": "涩谷与原宿",
+        "items": [
+          {
+            "time": "10:00",
+            "title": "明治神宫",
+            "kind": "activity",
+            "detail": "都市中的森林参道。",
+            "est_cost": 0
+          },
+          {
+            "time": "12:30",
+            "title": "原宿竹下通",
+            "kind": "activity",
+            "detail": "年轻潮流街区，可丽饼。",
+            "est_cost": 80
+          },
+          {
+            "time": "18:00",
+            "title": "涩谷十字路口与晚餐",
+            "kind": "food",
+            "detail": "涩谷横丁多样选择。",
+            "est_cost": 200
+          }
+        ]
+      },
+      {
+        "day": 5,
+        "date": "2026-09-05",
+        "theme": "台场与返程",
+        "items": [
+          {
+            "time": "09:30",
+            "title": "台场海滨与teamLab",
+            "kind": "activity",
+            "detail": "数字艺术馆，建议提前购票。",
+            "est_cost": 220
+          },
+          {
+            "time": "15:00",
+            "title": "返程：东京 → 北京",
+            "kind": "transit",
+            "detail": "国航 CA168 东京成田 18:40 → 北京首都 22:00。",
+            "est_cost": 2600,
+            "booking_url": "https://flights.ctrip.com/online/list/oneway-tyo-bjs?depdate=2026-09-05"
+          }
+        ]
+      }
+    ],
+    "references": [
+      { "label": "东京国立博物馆", "value": "https://www.tnm.jp" },
+      { "label": "teamLab", "value": "https://www.teamlab.art/zh/e/tokyo" }
+    ]
+  },
+  "transport": {
+    "outbound": {
+      "from": "北京",
+      "to": "东京",
+      "recommended": "国航 CA167 上午直飞，午后抵达，衔接首日浅草。",
+      "options": [
+        {
+          "mode": "飞机",
+          "name": "CA167",
+          "depart": "北京首都 09:20",
+          "arrive": "东京成田 13:40",
+          "duration": "约4h20m",
+          "price_cny": "2600 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-bjs-tyo?depdate=2026-09-01",
+          "source_url": "https://www.airchina.com.cn"
+        },
+        {
+          "mode": "飞机",
+          "name": "NH962",
+          "depart": "北京首都 08:35",
+          "arrive": "东京羽田 12:55",
+          "duration": "约4h20m",
+          "price_cny": "2900 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-bjs-tyo?depdate=2026-09-01",
+          "source_url": "https://www.ana.co.jp"
+        }
+      ]
+    },
+    "inbound": {
+      "from": "东京",
+      "to": "北京",
+      "recommended": "国航 CA168 傍晚返程，留足台场游玩时间。",
+      "options": [
+        {
+          "mode": "飞机",
+          "name": "CA168",
+          "depart": "东京成田 18:40",
+          "arrive": "北京首都 22:00",
+          "duration": "约4h20m",
+          "price_cny": "2600 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-tyo-bjs?depdate=2026-09-05",
+          "source_url": "https://www.airchina.com.cn"
+        }
+      ]
+    },
+    "airport_transfer": "成田机场乘 N'EX 成田特快至东京站约 60 分钟。",
+    "local": [
+      {
+        "from_area": "浅草",
+        "to_area": "上野",
+        "mode": "地铁",
+        "note": "银座线约 5 分钟。"
+      }
+    ]
+  },
+  "accommodation": {
+    "recommended": "选上野站附近商务酒店，博物馆与交通枢纽兼顾，性价比高。",
+    "area_advice": "上野居中，去浅草/银座/涩谷均在 30 分钟内，动线最短。",
+    "options": [
+      {
+        "name": "上野世纪酒店",
+        "type": "酒店",
+        "area": "上野站前",
+        "price_per_night_cny": "600~750",
+        "rating": "4.2",
+        "why": "紧邻 JR 上野站，去成田机场直达。",
+        "booking_url": "https://www.booking.com/searchresults.zh-cn.html?ss=%E4%B8%8A%E9%87%8E&checkin=2026-09-01&checkout=2026-09-05",
+        "source_url": "https://www.booking.com"
+      },
+      {
+        "name": "浅草豪景酒店",
+        "type": "酒店",
+        "area": "浅草雷门",
+        "price_per_night_cny": "550~700",
+        "rating": "4.3",
+        "why": "可俯瞰晴空塔，近浅草寺。",
+        "booking_url": "https://www.booking.com/searchresults.zh-cn.html?ss=%E6%B5%85%E8%8D%89&checkin=2026-09-01&checkout=2026-09-05",
+        "source_url": "https://www.booking.com"
+      }
+    ]
+  },
+  "validator": {
+    "passed": true,
+    "issues": [],
+    "suggestions": ["teamLab 与部分博物馆建议提前购票以免排队。"]
+  }
+}

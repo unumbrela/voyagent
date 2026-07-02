@@ -152,6 +152,8 @@ export const itinerarySchema = obj({
           kind: str,
           detail: str,
           est_cost: num,
+          why: str, // 为什么推荐它：从上游 agent 的选择依据忠实搬运（一句话）；无依据填 ""
+          source_url: str, // 该条目的取证来源链接（上游带 source_url 的忠实搬运）；无来源填 ""
         }),
       },
     }),

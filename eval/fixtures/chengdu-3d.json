@@ -1,0 +1,173 @@
+{
+  "itinerary": {
+    "title": "成都 3 日：火锅与慢生活",
+    "overview": "宽窄巷子—锦里—大熊猫基地—玉林小酒馆，动线紧凑，主打美食。",
+    "days": [
+      {
+        "day": 1,
+        "date": "2026-11-14",
+        "theme": "抵达与市井",
+        "items": [
+          {
+            "time": "08:30",
+            "title": "购票出发：杭州 → 成都",
+            "kind": "transit",
+            "detail": "东方航空 MU2806 杭州萧山 08:30 → 成都天府 12:00，约3h30m，¥900 起。",
+            "est_cost": 900,
+            "booking_url": "https://flights.ctrip.com/online/list/oneway-hgh-ctu?depdate=2026-11-14"
+          },
+          {
+            "time": "15:00",
+            "title": "宽窄巷子",
+            "kind": "activity",
+            "detail": "清代街巷、盖碗茶与掏耳朵。",
+            "est_cost": 40
+          },
+          {
+            "time": "19:00",
+            "title": "老码头火锅",
+            "kind": "food",
+            "detail": "牛油锅底，毛肚黄喉。",
+            "est_cost": 220
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "date": "2026-11-15",
+        "theme": "熊猫与锦里",
+        "items": [
+          {
+            "time": "08:00",
+            "title": "成都大熊猫繁育研究基地",
+            "kind": "activity",
+            "detail": "早去看熊猫最活跃，建议 3 小时。",
+            "est_cost": 55
+          },
+          {
+            "time": "14:00",
+            "title": "武侯祠与锦里古街",
+            "kind": "activity",
+            "detail": "三国文化与小吃街。",
+            "est_cost": 50
+          },
+          {
+            "time": "19:30",
+            "title": "锦里小吃夜食",
+            "kind": "food",
+            "detail": "三大炮、钵钵鸡、串串。",
+            "est_cost": 120
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "date": "2026-11-16",
+        "theme": "人民公园与返程",
+        "items": [
+          {
+            "time": "09:00",
+            "title": "人民公园鹤鸣茶社",
+            "kind": "activity",
+            "detail": "竹椅盖碗茶，感受成都慢节奏。",
+            "est_cost": 30
+          },
+          {
+            "time": "13:00",
+            "title": "钟水饺/龙抄手午餐",
+            "kind": "food",
+            "detail": "老字号成都小吃。",
+            "est_cost": 80
+          },
+          {
+            "time": "17:30",
+            "title": "返程：成都 → 杭州",
+            "kind": "transit",
+            "detail": "东方航空 MU2805 成都天府 18:30 → 杭州萧山 21:00。",
+            "est_cost": 900,
+            "booking_url": "https://flights.ctrip.com/online/list/oneway-ctu-hgh?depdate=2026-11-16"
+          }
+        ]
+      }
+    ],
+    "references": [
+      { "label": "大熊猫基地", "value": "https://www.panda.org.cn" }
+    ]
+  },
+  "transport": {
+    "outbound": {
+      "from": "杭州",
+      "to": "成都",
+      "recommended": "MU2806 上午直飞，午后抵达衔接宽窄巷子。",
+      "options": [
+        {
+          "mode": "飞机",
+          "name": "MU2806",
+          "depart": "杭州萧山 08:30",
+          "arrive": "成都天府 12:00",
+          "duration": "约3h30m",
+          "price_cny": "900 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-hgh-ctu?depdate=2026-11-14",
+          "source_url": "https://www.ceair.com"
+        },
+        {
+          "mode": "高铁",
+          "name": "G1974",
+          "depart": "杭州东 08:12",
+          "arrive": "成都东 19:40",
+          "duration": "约11h28m",
+          "price_cny": "780 起",
+          "booking_url": "https://www.12306.cn/index/",
+          "source_url": "https://www.12306.cn"
+        }
+      ]
+    },
+    "inbound": {
+      "from": "成都",
+      "to": "杭州",
+      "recommended": "MU2805 傍晚返程，21:00 抵达早于最晚到达 22:00。",
+      "options": [
+        {
+          "mode": "飞机",
+          "name": "MU2805",
+          "depart": "成都天府 18:30",
+          "arrive": "杭州萧山 21:00",
+          "duration": "约3h30m",
+          "price_cny": "900 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-ctu-hgh?depdate=2026-11-16",
+          "source_url": "https://www.ceair.com"
+        }
+      ]
+    },
+    "airport_transfer": "成都天府机场乘地铁 18 号线至市区约 45 分钟。",
+    "local": [
+      {
+        "from_area": "宽窄巷子",
+        "to_area": "人民公园",
+        "mode": "步行",
+        "note": "约 15 分钟。"
+      }
+    ]
+  },
+  "accommodation": {
+    "recommended": "选春熙路/宽窄巷子一带，逛吃与地铁均便利。",
+    "area_advice": "春熙路居中，去锦里、人民公园均在 20 分钟内。",
+    "options": [
+      {
+        "name": "成都春熙路亚朵酒店",
+        "type": "酒店",
+        "area": "春熙路",
+        "price_per_night_cny": "400~520",
+        "rating": "4.6",
+        "why": "地铁 2/3 号线交汇，步行可达太古里。",
+        "booking_url": "https://www.booking.com/searchresults.zh-cn.html?ss=%E6%98%A5%E7%86%99%E8%B7%AF&checkin=2026-11-14&checkout=2026-11-16",
+        "source_url": "https://www.booking.com"
+      }
+    ]
+  },
+  "validator": {
+    "passed": true,
+    "issues": [],
+    "suggestions": ["大熊猫基地建议 8:00 前到达，避开人流。"]
+  }
+}

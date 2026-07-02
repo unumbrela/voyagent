@@ -1,0 +1,120 @@
+{
+  "itinerary": {
+    "title": "大阪亲子 4 日",
+    "overview": "环球影城 + 城市漫步。（本 fixture 有意埋入多处缺陷，用于演示评测能抓回归。）",
+    "days": [
+      {
+        "day": 1,
+        "date": "2026-10-01",
+        "theme": "抵达与入住",
+        "items": [
+          {
+            "time": "14:00",
+            "title": "入住难波酒店",
+            "kind": "lodging",
+            "detail": "放行李、附近吃晚饭。（缺陷：首项应是去程出发，而非入住）",
+            "est_cost": 0
+          },
+          {
+            "time": "18:00",
+            "title": "道顿堀晚餐",
+            "kind": "food",
+            "detail": "章鱼烧、螃蟹道乐。",
+            "est_cost": 260
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "date": "2026-10-02",
+        "theme": "环球影城",
+        "items": [
+          {
+            "time": "09:00",
+            "title": "日本环球影城",
+            "kind": "activity",
+            "detail": "任天堂世界、哈利波特园区。",
+            "est_cost": 1200
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "date": "2026-10-03",
+        "theme": "大阪城与返程",
+        "items": [
+          {
+            "time": "10:00",
+            "title": "大阪城公园",
+            "kind": "activity",
+            "detail": "天守阁与护城河。（缺陷：仅 3 天，少于预期的 4 天）",
+            "est_cost": 60
+          }
+        ]
+      }
+    ],
+    "references": []
+  },
+  "transport": {
+    "outbound": {
+      "from": "上海",
+      "to": "大阪",
+      "recommended": "东航直飞，上午抵达。",
+      "options": [
+        {
+          "mode": "飞机",
+          "name": "MU516",
+          "depart": "上海浦东 09:00",
+          "arrive": "大阪关西 12:10",
+          "duration": "约3h10m",
+          "price_cny": "1800 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-sha-osa?depdate=2026-10-01",
+          "source_url": ""
+        }
+      ]
+    },
+    "inbound": {
+      "from": "大阪",
+      "to": "上海",
+      "recommended": "傍晚返程。",
+      "options": [
+        {
+          "mode": "飞机",
+          "name": "MU515",
+          "depart": "大阪关西 13:20",
+          "arrive": "上海浦东 15:00",
+          "duration": "约3h10m",
+          "price_cny": "1800 起",
+          "booking_url": "https://flights.ctrip.com/online/list/oneway-osa-sha?depdate=2026-10-04",
+          "source_url": "https://www.ceair.com"
+        }
+      ]
+    },
+    "airport_transfer": "关西机场乘南海电铁至难波约 45 分钟。",
+    "local": []
+  },
+  "accommodation": {
+    "recommended": "选难波，环球影城与市区交通兼顾。",
+    "area_advice": "难波居中，去环球影城约 30 分钟。",
+    "options": [
+      {
+        "name": "难波光芒酒店",
+        "type": "酒店",
+        "area": "难波",
+        "price_per_night_cny": "700~900",
+        "rating": "4.1",
+        "why": "近地铁，亲子友好。",
+        "booking_url": "https://www.booking.com/searchresults.zh-cn.html?ss=%E9%9A%BE%E6%B3%A2",
+        "source_url": "https://www.booking.com"
+      }
+    ]
+  },
+  "validator": {
+    "passed": false,
+    "issues": [
+      { "severity": "high", "area": "交通", "note": "去程 MU516 09:00 早于当日当前时间 10:00，已发车。" },
+      { "severity": "high", "area": "行程", "note": "行程仅 3 天，与 4 天日期不符。" }
+    ],
+    "suggestions": ["改选当日 10:00 之后的去程班次。", "补齐第 4 天行程。"]
+  }
+}

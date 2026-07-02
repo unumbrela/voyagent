@@ -3,6 +3,8 @@ import {
   createServerSupabase,
 } from "@/lib/supabase/server";
 import { runPipeline } from "@/lib/pipeline";
+import { createTrace, persistSpans, span } from "@/lib/otel/trace";
+import { recallTexts } from "@/lib/memory";
 import type { ProgressEvent, TripContext } from "@/lib/agents/types";
 
 export const runtime = "nodejs";
@@ -37,6 +39,12 @@ export async function GET(
     return new Response(`未找到行程或无权访问: ${tripId}`, { status: 404 });
   }
 
+  // 记忆召回（读）：按目的地+风格召回用户跨行程的长期偏好，注入所有 agent 的 prompt
+  const memQuery = `${ctx.destination ?? ""} ${ctx.travel_style ?? ""}`.trim();
+  const userMemory = memQuery
+    ? await recallTexts(userClient, user.id, memQuery, 6)
+    : [];
+
   // 归属已确认；编排用 admin 客户端写 agent_outputs/itineraries（受信任的服务端流程）
   const supabase = createAdminClient();
 
@@ -53,7 +61,7 @@ export async function GET(
     budget: ctx.budget,
     travel_style: ctx.travel_style,
     party_size: ctx.party_size ?? 1,
-    constraints,
+    constraints: { ...constraints, user_memory: userMemory },
   };
 
   const encoder = new TextEncoder();
@@ -62,8 +70,14 @@ export async function GET(
       const send = (e: ProgressEvent) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
 
+      // 一条 trace 贯穿整条流水线：agent/llm/tool span 自动嵌套收集
+      const trace = createTrace(tripId);
       try {
-        await runPipeline({ tripId, context, supabase, onEvent: send });
+        await trace.run(() =>
+          span("pipeline", "pipeline", () =>
+            runPipeline({ tripId, context, supabase, onEvent: send }),
+          ),
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         await supabase
@@ -72,6 +86,8 @@ export async function GET(
           .eq("id", tripId);
         send({ type: "error", message });
       } finally {
+        // 观测落库（失败只告警，不影响主流程）；即使中途抛错也已收集到 span
+        await persistSpans(supabase, tripId, trace.spans);
         controller.close();
       }
     },

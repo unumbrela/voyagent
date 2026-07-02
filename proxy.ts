@@ -10,6 +10,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // 跳过静态资源；其余（含页面与 /api）都经过，以保证会话 cookie 持续刷新
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|glb|gltf|mp3|wav|ogg)$).*)",
   ],
 };

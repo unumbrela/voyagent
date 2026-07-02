@@ -1,0 +1,30 @@
+name: eval
+
+# 离线评测回归门禁：对着 eval/fixtures 跑确定性断言，任何 high 失败即 fail。
+# 不需要任何 API key（LLM-as-Judge 与 --live 需 key，故不在 CI 跑）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval
+      - run: pnpm redteam # prompt injection 检测回归（离线、零 key）
+      - run: pnpm memory:demo # Agent Memory 生命周期回归（离线、零 key）
+      - run: pnpm trace:demo # 可观测层聚合回归（离线、零 key）
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval/report/

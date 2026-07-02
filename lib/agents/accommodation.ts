@@ -3,6 +3,7 @@ import { runAgent } from "./runAgent";
 import { accommodationSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import { hotelBookingUrl } from "@/lib/hotels";
+import { guardUrls } from "@/lib/guardrails";
 import type { AgentContext, TripContext } from "./types";
 
 interface HotelOption {
@@ -67,5 +68,13 @@ export async function runAccommodation(ctx: AgentContext) {
   });
   // 硬保证：预订链接统一覆盖为真实可下单深链
   applyBookingLinks(payload, ctx.context);
+  // 输出关：预订链接域白名单安全网（与 transport 对称，防被诱导产出钓鱼链接）
+  const urlFindings = guardUrls(payload);
+  if (urlFindings.length) {
+    console.warn(
+      `[guardrail] accommodation 输出链接命中 ${urlFindings.length} 条：`,
+      urlFindings.map((f) => f.id).join(", "),
+    );
+  }
   return payload;
 }

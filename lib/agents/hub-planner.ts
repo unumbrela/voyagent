@@ -25,6 +25,10 @@ export function runHubPlanner(ctx: AgentContext) {
       "交通【必须忠实搬运 transport 产物，不得改动或杜撰车次/航班/票价】：" +
       "references 必须包含：『去程购票』『返程购票』两条，value 写明推荐班次摘要 + booking_url；" +
       "再加货币、语言、紧急提示等。所有票务信息以 transport 给的为准，搜不到的标『实时查询』。\n" +
+      "【每个条目的 why 与 source_url（可解释与取证，必填字段）】：" +
+      "why 用一句话写「为什么选它」——从上游产物忠实搬运选择依据（活动/餐饮用 activities/food 的推荐理由，" +
+      "酒店用 accommodation 的 why，车次/航班用 transport 的 recommended 理由）；上游没给依据就填空字符串，不得编造。" +
+      "source_url 忠实搬运该条目对应上游产物的 source_url（取证来源链接）；没有就填空字符串，不得虚构链接。\n" +
       "【若上游含 validator 质检产物（修订轮）】：这是一次修订，请逐条修复其中 severity=high 的问题" +
       "（如时间冲突、票务缺链接、节奏过载、预算不符），在保持其余内容稳定的前提下产出改进后的完整行程。只输出结构化 JSON。",
     userPrompt:

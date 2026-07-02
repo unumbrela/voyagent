@@ -40,7 +40,9 @@ export async function updateSession(
 
   const path = request.nextUrl.pathname;
   const isPublic =
-    path.startsWith("/login") || path.startsWith("/auth");
+    path.startsWith("/login") ||
+    path.startsWith("/auth") ||
+    path.startsWith("/share"); // 公开只读分享页，无需登录
   const isApi = path.startsWith("/api");
 
   if (!user && !isPublic && !isApi) {

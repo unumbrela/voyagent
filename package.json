@@ -7,16 +7,25 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:deepseek": "tsx --env-file=.env.local scripts/test-deepseek.ts"
+    "test:deepseek": "tsx --env-file=.env.local scripts/test-deepseek.ts",
+    "eval": "tsx eval/run.ts",
+    "eval:live": "tsx --env-file=.env.local eval/run.ts --live --judge",
+    "trace:demo": "tsx scripts/trace-demo.ts",
+    "redteam": "tsx guardrail/run.ts",
+    "memory:demo": "tsx scripts/memory-demo.ts",
+    "analyze:study": "tsx --env-file=.env.local scripts/analyze-study.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "leaflet": "^1.9.4",
+    "lucide-react": "^1.23.0",
+    "motion": "^12.42.2",
     "next": "16.2.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "wawa-lipsync": "^0.0.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -26,6 +35,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
     "typescript": "^5"

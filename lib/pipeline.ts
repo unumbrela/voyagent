@@ -3,6 +3,8 @@ import { WAVES } from "@/lib/agents/orchestrator";
 import { runHubPlanner } from "@/lib/agents/hub-planner";
 import { runValidator } from "@/lib/agents/validator";
 import { ensureDepartureFirst } from "@/lib/agents/finalize";
+import { summarizeAgentOutput } from "@/lib/agents/summarize";
+import { span } from "@/lib/otel/trace";
 import type {
   AgentContext,
   AgentName,
@@ -86,18 +88,31 @@ export async function runPipeline({
         // 续跑命中：复用已有产物，补发 done 事件点亮 UI
         if (completed.has(step.name)) {
           upstream[step.name] = completed.get(step.name);
-          onEvent({ type: "agent_status", agent: step.name, status: "done" });
+          onEvent({
+            type: "agent_status",
+            agent: step.name,
+            status: "done",
+            summary: summarizeAgentOutput(step.name, completed.get(step.name)),
+          });
           return;
         }
         await markOutput(supabase, tripId, step.name, "running", null);
         onEvent({ type: "agent_status", agent: step.name, status: "running" });
         try {
-          const payload = await withRetry(step.name, () =>
-            step.run({ context, upstream }),
+          const payload = await span(
+            step.name,
+            "agent",
+            () => withRetry(step.name, () => step.run({ context, upstream })),
+            { wave: WAVES.indexOf(wave) + 1 },
           );
           upstream[step.name] = payload;
           await markOutput(supabase, tripId, step.name, "done", payload);
-          onEvent({ type: "agent_status", agent: step.name, status: "done" });
+          onEvent({
+            type: "agent_status",
+            agent: step.name,
+            status: "done",
+            summary: summarizeAgentOutput(step.name, payload),
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           await markOutput(supabase, tripId, step.name, "error", null, message);
@@ -119,20 +134,36 @@ export async function runPipeline({
     try {
       onEvent({ type: "agent_status", agent: "hub_planner", status: "running" });
       // upstream 此时含 validator → hub_planner 据其修复 high 问题
-      const revised = await withRetry("hub_planner", () =>
-        runHubPlanner({ context, upstream }),
+      const revised = await span(
+        "hub_planner",
+        "agent",
+        () => withRetry("hub_planner", () => runHubPlanner({ context, upstream })),
+        { phase: "revise" },
       );
       upstream.hub_planner = revised;
       await markOutput(supabase, tripId, "hub_planner", "done", revised);
-      onEvent({ type: "agent_status", agent: "hub_planner", status: "done" });
+      onEvent({
+        type: "agent_status",
+        agent: "hub_planner",
+        status: "done",
+        summary: summarizeAgentOutput("hub_planner", revised),
+      });
 
       onEvent({ type: "agent_status", agent: "validator", status: "running" });
-      const recheck = await withRetry("validator", () =>
-        runValidator({ context, upstream }),
+      const recheck = await span(
+        "validator",
+        "agent",
+        () => withRetry("validator", () => runValidator({ context, upstream })),
+        { phase: "recheck" },
       );
       upstream.validator = recheck;
       await markOutput(supabase, tripId, "validator", "done", recheck);
-      onEvent({ type: "agent_status", agent: "validator", status: "done" });
+      onEvent({
+        type: "agent_status",
+        agent: "validator",
+        status: "done",
+        summary: summarizeAgentOutput("validator", recheck),
+      });
     } catch (err) {
       // 修订轮失败不致命：保留首轮结果，记日志后继续收尾
       console.warn("[pipeline] validator 修订轮失败，保留首轮结果", err);

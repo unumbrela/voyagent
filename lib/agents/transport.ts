@@ -4,6 +4,7 @@ import { transportSchema } from "./schemas";
 import { contextBlock, upstreamBlock } from "./prompt";
 import { railBookingUrl } from "@/lib/stations";
 import { flightBookingUrl } from "@/lib/airports";
+import { guardUrls } from "@/lib/guardrails";
 import type { AgentContext, TripContext } from "./types";
 
 interface TransportOption {
@@ -134,5 +135,13 @@ export async function runTransport(ctx: AgentContext) {
   enforceTimeWindows(payload, ctx.context);
   // 铁路购票链接替换成 12306 直达深链
   await applyBookingLinks(payload, ctx.context);
+  // 输出关：预订链接域白名单安全网——非可信域一律置空（防被诱导产出钓鱼链接）
+  const urlFindings = guardUrls(payload);
+  if (urlFindings.length) {
+    console.warn(
+      `[guardrail] transport 输出链接命中 ${urlFindings.length} 条：`,
+      urlFindings.map((f) => f.id).join(", "),
+    );
+  }
   return payload;
 }

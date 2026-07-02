@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LMap, LayerGroup, Marker } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { dayColorOf } from "@/lib/palette";
+import { Map as MapIcon } from "@/app/ui/icons";
 
 /** 与 page.tsx 对齐的最小类型 */
 interface Item {
@@ -30,18 +32,21 @@ interface Pt {
   label: string;
 }
 
-/** 按天分配的高辨识度配色 */
-const DAY_COLORS = [
-  "#6366f1", "#ec4899", "#f59e0b", "#10b981", "#06b6d4",
-  "#8b5cf6", "#ef4444", "#14b8a6", "#f97316", "#3b82f6",
-];
-const colorOf = (day: number) => DAY_COLORS[(day - 1 + DAY_COLORS.length) % DAY_COLORS.length];
+// 按天配色：全站统一取自 lib/palette（与编号针/分享页/预算图一致）
+const colorOf = dayColorOf;
 
-const KIND_ICON: Record<string, string> = {
-  activity: "📍",
-  food: "🍽️",
-  rest: "🏨",
-  transit: "🚄",
+/** 类别 → 弹窗里的中文标签（配类别色圆点，替代 emoji） */
+const KIND_LABEL: Record<string, string> = {
+  activity: "活动",
+  food: "餐饮",
+  rest: "住宿",
+  transit: "交通",
+};
+const KIND_COLOR: Record<string, string> = {
+  activity: "var(--c-activity)",
+  food: "var(--c-food)",
+  rest: "var(--c-rest)",
+  transit: "var(--c-transit)",
 };
 
 /** 哪些条目值得落到地图上（有具体地点的）。本地交通/纯休息标题太泛，靠 geocode 结果自然过滤。 */
@@ -65,7 +70,28 @@ interface Resolved {
   step: number; // 全局顺序编号
 }
 
-export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
+export default function TripMap({
+  days,
+  meta,
+  fill = false,
+  onResolved,
+  hoverKey = null,
+  onHoverKey,
+  syncDay,
+}: {
+  days: Day[];
+  meta: Meta;
+  /** true 时铺满父容器高度（用于右侧 sticky 地图栏）；否则固定 460px。 */
+  fill?: boolean;
+  /** 地点坐标解析完成后回传（key = "dayIndex-itemIndex"），供页面计算条目间路程耗时 */
+  onResolved?: (coords: Record<string, { lat: number; lon: number }>) => void;
+  /** 列表 ↔ 地图双向联动：当前悬停条目 key（"dayIndex-itemIndex"） */
+  hoverKey?: string | null;
+  /** 鼠标悬停到针脚时回传条目 key（离开回传 null） */
+  onHoverKey?: (key: string | null) => void;
+  /** 滚动联动：页面滚到第几天就聚焦第几天（null=全程）。undefined 表示不启用 */
+  syncDay?: number | null;
+}) {
   // 用「标题序列」作为签名：只有地点真正变化才重新 geocode（编辑时间/花费不触发）
   const signature = useMemo(
     () =>
@@ -83,6 +109,21 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
   const [origin, setOrigin] = useState<Pt | null>(null);
   const [resolved, setResolved] = useState<Resolved[]>([]);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  // 滚动联动：页面滚到哪天，地图聚焦哪天（手动点天数 chip 仍即时生效，
+  // 继续滚动后由 scrollspy 重新接管——行为可预期）。
+  // 「prop 变化时调整 state」按官方模式在渲染期间完成，不进 effect。
+  const [lastSyncDay, setLastSyncDay] = useState(syncDay);
+  if (syncDay !== lastSyncDay) {
+    setLastSyncDay(syncDay);
+    if (syncDay !== undefined) setSelectedDay(syncDay);
+  }
+
+  // onHoverKey 用 ref 持有：marker 事件只绑一次，不随回调身份变化重建
+  const onHoverKeyRef = useRef(onHoverKey);
+  useEffect(() => {
+    onHoverKeyRef.current = onHoverKey;
+  });
 
   // ── 地点 → 坐标 ──
   useEffect(() => {
@@ -140,6 +181,12 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
         setCenter(data.center);
         setOrigin(data.originPoint);
         setResolved(list);
+        // 坐标上交给页面（条目间路程耗时估算用）
+        if (onResolved) {
+          const coords: Record<string, { lat: number; lon: number }> = {};
+          for (const r of list) coords[r.key] = { lat: r.pt.lat, lon: r.pt.lon };
+          onResolved(coords);
+        }
       } catch (e) {
         if (alive) setErr(e instanceof Error ? e.message : String(e));
       } finally {
@@ -157,6 +204,8 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
   const mapRef = useRef<LMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
   const LRef = useRef<typeof import("leaflet") | null>(null);
+  // 条目 key → marker：hover 联动用（重绘时重建）
+  const markerByKey = useRef<Map<string, Marker>>(new Map());
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -199,6 +248,7 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
     const group = layerRef.current;
     if (!ready || !L || !map || !group) return;
     group.clearLayers();
+    markerByKey.current.clear();
 
     const focused = selectedDay; // null = 全部
     const allLatLng: [number, number][] = [];
@@ -265,18 +315,28 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
         const m: Marker = L.marker([r.pt.lat, r.pt.lon], {
           icon: pin(color, String(r.step), dim),
           zIndexOffset: dim ? 0 : 500,
+          riseOnHover: true,
         });
+        const kindDot = `<span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:${KIND_COLOR[r.kind] ?? "var(--c-other)"};margin-right:5px;vertical-align:1px"></span>`;
         m.bindPopup(
           `<div class="tp-pop">
-             <div class="tp-pop-h" style="color:${color}">第 ${r.day} 天 · 第 ${r.step} 站</div>
-             <div class="tp-pop-t">${KIND_ICON[r.kind] ?? "📍"} ${esc(r.title)}</div>
-             ${r.time ? `<div class="tp-pop-time">🕑 ${esc(r.time)}</div>` : ""}
+             <div class="tp-pop-h" style="color:${color}">第 ${r.day} 天 · 第 ${r.step} 站 · ${KIND_LABEL[r.kind] ?? "地点"}</div>
+             <div class="tp-pop-t">${kindDot}${esc(r.title)}</div>
+             ${r.time ? `<div class="tp-pop-time">${esc(r.time)}</div>` : ""}
              ${r.detail ? `<div class="tp-pop-d">${esc(r.detail)}</div>` : ""}
              ${r.est_cost ? `<div class="tp-pop-c">约 ¥${r.est_cost}</div>` : ""}
            </div>`,
           { className: "tp-pop-wrap" },
         );
+        // 悬停轻提示 + 双向联动（点击仍是详情弹窗）；direction auto 避免贴边裁切
+        m.bindTooltip(`${r.time ? `${esc(r.time)} · ` : ""}${esc(r.title)}`, {
+          direction: "auto",
+          className: "tp-tip",
+        });
+        m.on("mouseover", () => onHoverKeyRef.current?.(r.key));
+        m.on("mouseout", () => onHoverKeyRef.current?.(null));
         m.addTo(group);
+        markerByKey.current.set(r.key, m);
         allLatLng.push([r.pt.lat, r.pt.lon]);
         if (focused === day) focusLatLng.push([r.pt.lat, r.pt.lon]);
       });
@@ -293,6 +353,18 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
     }
   }, [ready, resolved, origin, center, selectedDay, meta.origin]);
 
+  // ── 列表行 hover → 对应针脚放大 + 轻提示（反向由 marker mouseover 回传 onHoverKey）──
+  useEffect(() => {
+    for (const [key, m] of markerByKey.current) {
+      const el = m.getElement()?.querySelector(".tp-pin");
+      if (!el) continue;
+      el.classList.toggle("tp-hot", key === hoverKey);
+      if (key === hoverKey) m.openTooltip();
+      else m.closeTooltip();
+    }
+    // resolved/selectedDay 变化会重建 marker，需重放当前 hover 态
+  }, [hoverKey, resolved, selectedDay]);
+
   const dayNumbers = useMemo(
     () => Array.from(new Set(resolved.map((r) => r.day))).sort((a, b) => a - b),
     [resolved],
@@ -304,12 +376,13 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
   );
 
   return (
-    <section className="mt-6">
+    <section className={fill ? "flex h-full flex-col" : "mt-6"}>
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <span>🗺️ 行程地图</span>
+        <h2 className="font-display flex items-center gap-2 text-lg font-semibold text-ink">
+          <MapIcon className="h-4.5 w-4.5 text-teal-dark" aria-hidden />
+          <span>行程地图</span>
           {!loading && (
-            <span className="text-xs font-normal text-neutral-400">
+            <span className="font-data text-xs font-normal text-muted">
               {mappedCount}/{totalPlaces} 个地点已定位
             </span>
           )}
@@ -321,10 +394,10 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setSelectedDay(null)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
               selectedDay === null
-                ? "border-neutral-900 bg-neutral-900 text-white"
-                : "border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                ? "border-ink bg-ink text-white"
+                : "border-line text-muted hover:border-line-strong"
             }`}
           >
             全程
@@ -336,10 +409,10 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
               <button
                 key={d}
                 onClick={() => setSelectedDay(active ? null : d)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
                   active
                     ? "text-white"
-                    : "border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                    : "border-line text-muted hover:border-line-strong"
                 }`}
                 style={
                   active
@@ -359,32 +432,39 @@ export default function TripMap({ days, meta }: { days: Day[]; meta: Meta }) {
       )}
 
       {/* 地图容器 */}
-      <div className="relative mt-3 overflow-hidden rounded-2xl border border-neutral-200 shadow-sm">
-        <div ref={mapEl} className="h-[460px] w-full bg-neutral-100" />
+      <div
+        className={`relative mt-3 overflow-hidden rounded-card border border-line shadow-soft ${
+          fill ? "min-h-0 flex-1" : ""
+        }`}
+      >
+        <div
+          ref={mapEl}
+          className={`w-full bg-neutral-100 ${fill ? "h-full min-h-[320px]" : "h-[460px]"}`}
+        />
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-            <div className="flex items-center gap-2 text-sm text-neutral-500">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-teal" />
               正在定位行程地点…
             </div>
           </div>
         )}
 
         {!loading && err && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 px-6 text-center text-sm text-red-600">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 px-6 text-center text-sm text-seal">
             {err}
           </div>
         )}
 
         {!loading && !err && mappedCount === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 px-6 text-center text-sm text-neutral-500">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 px-6 text-center text-sm text-muted">
             暂无可定位的地点（行程里的地点名可能太宽泛，编辑得更具体后会自动出现在地图上）。
           </div>
         )}
       </div>
 
-      <p className="mt-2 text-xs text-neutral-400">
+      <p className="mt-2 text-xs text-muted/80">
         点击标记看详情；点上方「第 N 天」聚焦当天动线。地图随行程编辑自动更新。
       </p>
     </section>

@@ -13,9 +13,20 @@ export function contextBlock(c: TripContext): string {
     `旅行风格: ${c.travel_style ?? "未定"}`,
     `人数: ${c.party_size}`,
   ];
-  // origin 已单列，剔除后再渲染其余约束，避免重复
+  // 用户长期记忆（跨行程召回的持久偏好）——个性化的核心注入点
+  const mem = (c.constraints?.user_memory ?? null) as unknown;
+  if (Array.isArray(mem) && mem.length) {
+    lines.push(
+      `用户长期偏好(记忆): \n` +
+        mem.map((m) => `  - ${String(m)}`).join("\n") +
+        `\n（据此个性化，但以本次明确诉求优先；若与本次冲突以本次为准）`,
+    );
+  }
+
+  // origin / user_memory 已单列，剔除后再渲染其余约束，避免重复
   const rest = { ...(c.constraints ?? {}) };
   delete rest.origin;
+  delete rest.user_memory;
   if (Object.keys(rest).length) {
     lines.push(`其他约束: ${JSON.stringify(rest)}`);
   }

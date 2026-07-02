@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createTrip } from "@/lib/trips";
+import { rememberFromText } from "@/lib/memory";
 
 export const runtime = "nodejs";
 
-/** POST /api/trips —— 创建一次行程 + 写入单一事实来源 trip_context */
+/** POST /api/trips —— 创建一次行程 + 写入单一事实来源 trip_context（核心见 lib/trips.ts） */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "请求体不是合法 JSON" }, { status: 400 });
-  }
-
-  const destination = String(body.destination ?? "").trim();
-  if (!destination) {
-    return NextResponse.json({ error: "缺少 destination" }, { status: 400 });
   }
 
   // 以登录用户身份写入：RLS 要求 user_id = auth.uid()
@@ -26,48 +23,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
 
-  const { data: trip, error: tripErr } = await supabase
-    .from("trips")
-    .insert({ status: "draft", user_id: user.id })
-    .select("id")
-    .single();
-  if (tripErr || !trip) {
-    return NextResponse.json(
-      { error: `创建 trip 失败: ${tripErr?.message}` },
-      { status: 500 },
-    );
+  try {
+    const id = await createTrip(supabase, user.id, {
+      destination: String(body.destination ?? ""),
+      origin: body.origin ? String(body.origin) : null,
+      start_date: (body.start_date as string) ?? null,
+      end_date: (body.end_date as string) ?? null,
+      budget: (body.budget as number) ?? null,
+      travel_style: (body.travel_style as string) ?? null,
+      party_size: Number(body.party_size ?? 1),
+      now: body.now ? String(body.now) : null,
+      depart_time: body.depart_time ? String(body.depart_time) : null,
+      return_by_time: body.return_by_time ? String(body.return_by_time) : null,
+    });
+
+    // 沉淀记忆：从旅行风格/诉求里抽取持久偏好，供后续行程个性化（非阻塞，失败不影响建行程）
+    const style = String(body.travel_style ?? "").trim();
+    if (style) await rememberFromText(supabase, user.id, style, "trip_create");
+
+    return NextResponse.json({ id });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const status = message.includes("destination") ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
-
-  // 出发地与时间约束存进 constraints（免去新增列的 schema 迁移）
-  const origin = body.origin ? String(body.origin).trim() : null;
-  const constraints = {
-    ...(typeof body.constraints === "object" && body.constraints
-      ? (body.constraints as Record<string, unknown>)
-      : {}),
-    ...(origin ? { origin } : {}),
-    ...(body.now ? { now: String(body.now) } : {}),
-    ...(body.depart_time ? { depart_time: String(body.depart_time) } : {}),
-    ...(body.return_by_time
-      ? { return_by_time: String(body.return_by_time) }
-      : {}),
-  };
-
-  const { error: ctxErr } = await supabase.from("trip_context").insert({
-    trip_id: trip.id,
-    destination,
-    start_date: body.start_date ?? null,
-    end_date: body.end_date ?? null,
-    budget: body.budget ?? null,
-    travel_style: body.travel_style ?? null,
-    party_size: Number(body.party_size ?? 1),
-    constraints,
-  });
-  if (ctxErr) {
-    return NextResponse.json(
-      { error: `写入 trip_context 失败: ${ctxErr.message}` },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ id: trip.id });
 }

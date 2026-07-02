@@ -8,6 +8,9 @@
  *    让 agent 基于自身知识作答 —— 这样没有搜索 key 也能纯 DeepSeek 端到端跑通。
  */
 
+import { span } from "@/lib/otel/trace";
+import { guardRetrieval, summarizeFindings } from "@/lib/guardrails";
+
 export interface SearchResult {
   title: string;
   url: string;
@@ -98,24 +101,51 @@ export async function runWebSearchTool(argsJson: string): Promise<string> {
   }
   if (!query) return "搜索参数缺少 query。";
 
+  return span(
+    "web_search",
+    "tool",
+    async (rec) => {
+      rec.setMeta("query", query);
+      const { text, findings } = await runWebSearchInner(query);
+      if (findings.length) {
+        // 把注入命中记进 trace（可观测层可见），并在服务端告警
+        rec.setMeta("guardrail", summarizeFindings(findings));
+        console.warn(
+          `[guardrail] 检索内容命中 ${findings.length} 条注入特征：`,
+          findings.map((f) => f.id).join(", "),
+        );
+      }
+      return text;
+    },
+    { query },
+  );
+}
+
+/** web 搜索工具的实际执行体（被 span 包裹） */
+async function runWebSearchInner(
+  query: string,
+): Promise<{ text: string; findings: import("@/lib/guardrails").Finding[] }> {
   if (!process.env.TAVILY_API_KEY) {
-    return (
-      "【搜索不可用：未配置 TAVILY_API_KEY】本次无法联网核实。" +
-      "严禁编造具体车次/航班号、时刻或票价；请改为：给出官方购票/查询链接" +
-      "（铁路 https://www.12306.cn ，机票走航司官网或携程/去哪儿），" +
-      "票价时刻一律标注「请在官方平台实时查询」。"
-    );
+    return {
+      text:
+        "【搜索不可用：未配置 TAVILY_API_KEY】本次无法联网核实。" +
+        "严禁编造具体车次/航班号、时刻或票价；请改为：给出官方购票/查询链接" +
+        "（铁路 https://www.12306.cn ，机票走航司官网或携程/去哪儿），" +
+        "票价时刻一律标注「请在官方平台实时查询」。",
+      findings: [],
+    };
   }
 
   const results = await webSearch(query, 6);
   if (!results.length) {
-    return (
-      `未搜到「${query}」的可靠结果。不要编造；请给出官方购票/查询链接，` +
-      `并标注「请在官方平台实时查询」。`
-    );
+    return {
+      text:
+        `未搜到「${query}」的可靠结果。不要编造；请给出官方购票/查询链接，` +
+        `并标注「请在官方平台实时查询」。`,
+      findings: [],
+    };
   }
 
-  return results
-    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`)
-    .join("\n\n");
+  // 检索关：中和 + 圈定 + 扫描后再交给模型（外部原文一律视为不可信数据）
+  return guardRetrieval(results);
 }

@@ -1,0 +1,242 @@
+{
+  "ranAt": "2026-07-02T02:44:44.741Z",
+  "reports": [
+    {
+      "id": "tokyo-5d",
+      "desc": "北京→东京 5天 跨境航班 · 美食+文化 · 宽预算",
+      "checks": [
+        {
+          "name": "day_count",
+          "pass": true,
+          "severity": "low",
+          "detail": "5 天，符合预期"
+        },
+        {
+          "name": "dates_consecutive",
+          "pass": true,
+          "severity": "low",
+          "detail": "日期连续且与出发日对齐"
+        },
+        {
+          "name": "days_nonempty",
+          "pass": true,
+          "severity": "low",
+          "detail": "每天都有条目"
+        },
+        {
+          "name": "departure_first",
+          "pass": true,
+          "severity": "low",
+          "detail": "首日第一项是去程出发"
+        },
+        {
+          "name": "transport_grounded",
+          "pass": true,
+          "severity": "low",
+          "detail": "3 个选项具体名均带来源"
+        },
+        {
+          "name": "transport_booking_url",
+          "pass": true,
+          "severity": "low",
+          "detail": "每个选项都有购票/预订链接"
+        },
+        {
+          "name": "accommodation_grounded",
+          "pass": true,
+          "severity": "low",
+          "detail": "2 个选项具体名均带来源"
+        },
+        {
+          "name": "accommodation_booking_url",
+          "pass": true,
+          "severity": "low",
+          "detail": "每个选项都有购票/预订链接"
+        },
+        {
+          "name": "budget_fit",
+          "pass": true,
+          "severity": "low",
+          "detail": "活动花费合计 ¥6780，预算 ¥12000"
+        },
+        {
+          "name": "items_valid",
+          "pass": true,
+          "severity": "low",
+          "detail": "14 个条目字段完整"
+        },
+        {
+          "name": "references_present",
+          "pass": true,
+          "severity": "low",
+          "detail": "2 条参考"
+        }
+      ],
+      "source": "fixture"
+    },
+    {
+      "id": "osaka-flawed",
+      "desc": "上海→大阪 4天 · 当天出发 · 紧预算（示范：有意埋入回归缺陷）",
+      "checks": [
+        {
+          "name": "day_count",
+          "pass": false,
+          "severity": "high",
+          "detail": "期望 4 天，实际 3 天"
+        },
+        {
+          "name": "dates_consecutive",
+          "pass": true,
+          "severity": "low",
+          "detail": "日期连续且与出发日对齐"
+        },
+        {
+          "name": "days_nonempty",
+          "pass": true,
+          "severity": "low",
+          "detail": "每天都有条目"
+        },
+        {
+          "name": "departure_first",
+          "pass": false,
+          "severity": "high",
+          "detail": "首日第一项应是「去程出发」，实际是 lodging:入住难波酒店"
+        },
+        {
+          "name": "transport_grounded",
+          "pass": false,
+          "severity": "high",
+          "detail": "疑似编造（有具体名但无来源）：MU516"
+        },
+        {
+          "name": "transport_booking_url",
+          "pass": true,
+          "severity": "low",
+          "detail": "每个选项都有购票/预订链接"
+        },
+        {
+          "name": "accommodation_grounded",
+          "pass": true,
+          "severity": "low",
+          "detail": "1 个选项具体名均带来源"
+        },
+        {
+          "name": "accommodation_booking_url",
+          "pass": true,
+          "severity": "low",
+          "detail": "每个选项都有购票/预订链接"
+        },
+        {
+          "name": "outbound_after_now",
+          "pass": false,
+          "severity": "high",
+          "detail": "1 个去程班次已发车（早于/等于当前 2026-10-01 10:00）：MU516 上海浦东 09:00"
+        },
+        {
+          "name": "budget_fit",
+          "pass": true,
+          "severity": "low",
+          "detail": "活动花费合计 ¥1520，预算 ¥8000"
+        },
+        {
+          "name": "items_valid",
+          "pass": true,
+          "severity": "low",
+          "detail": "4 个条目字段完整"
+        },
+        {
+          "name": "references_present",
+          "pass": false,
+          "severity": "low",
+          "detail": "行程未附任何参考来源"
+        }
+      ],
+      "source": "fixture"
+    },
+    {
+      "id": "chengdu-3d",
+      "desc": "杭州→成都 3天 · 国内高铁/航班 · 美食",
+      "checks": [
+        {
+          "name": "day_count",
+          "pass": true,
+          "severity": "low",
+          "detail": "3 天，符合预期"
+        },
+        {
+          "name": "dates_consecutive",
+          "pass": true,
+          "severity": "low",
+          "detail": "日期连续且与出发日对齐"
+        },
+        {
+          "name": "days_nonempty",
+          "pass": true,
+          "severity": "low",
+          "detail": "每天都有条目"
+        },
+        {
+          "name": "departure_first",
+          "pass": true,
+          "severity": "low",
+          "detail": "首日第一项是去程出发"
+        },
+        {
+          "name": "transport_grounded",
+          "pass": true,
+          "severity": "low",
+          "detail": "3 个选项具体名均带来源"
+        },
+        {
+          "name": "transport_booking_url",
+          "pass": true,
+          "severity": "low",
+          "detail": "每个选项都有购票/预订链接"
+        },
+        {
+          "name": "accommodation_grounded",
+          "pass": true,
+          "severity": "low",
+          "detail": "1 个选项具体名均带来源"
+        },
+        {
+          "name": "accommodation_booking_url",
+          "pass": true,
+          "severity": "low",
+          "detail": "每个选项都有购票/预订链接"
+        },
+        {
+          "name": "outbound_after_depart_time",
+          "pass": true,
+          "severity": "low",
+          "detail": "去程均不早于 08:00"
+        },
+        {
+          "name": "inbound_before_return_by",
+          "pass": true,
+          "severity": "low",
+          "detail": "返程均早于 22:00"
+        },
+        {
+          "name": "budget_fit",
+          "pass": true,
+          "severity": "low",
+          "detail": "活动花费合计 ¥2395，预算 ¥5000"
+        },
+        {
+          "name": "items_valid",
+          "pass": true,
+          "severity": "low",
+          "detail": "9 个条目字段完整"
+        },
+        {
+          "name": "references_present",
+          "pass": true,
+          "severity": "low",
+          "detail": "1 条参考"
+        }
+      ],
+      "source": "fixture"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { parseJsonLoose } from "@/lib/json";
+import { span } from "@/lib/otel/trace";
 
 /**
  * DeepSeek provider（OpenAI 兼容接口）。
@@ -66,28 +67,45 @@ export async function callDeepSeekJSON<T = unknown>(
     { role: "user", content: userPrompt },
   ];
 
-  // 单次 chat/completions 调用
-  const chat = async (extra: Record<string, unknown>) => {
-    const res = await fetch(`${BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
+  // 单次 chat/completions 调用（每次 = 一个 llm span，捕获真实 token 用量）
+  const chat = (extra: Record<string, unknown>) =>
+    span(
+      model,
+      "llm",
+      async (rec) => {
+        const res = await fetch(`${BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${key}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            max_tokens: maxTokens,
+            stream: false,
+            ...extra,
+          }),
+        });
+        if (!res.ok) {
+          throw new Error(`DeepSeek API ${res.status}: ${await res.text()}`);
+        }
+        const data = (await res.json()) as {
+          choices?: { message?: ChatMessage }[];
+          usage?: { prompt_tokens?: number; completion_tokens?: number };
+        };
+        if (data.usage) {
+          rec.setUsage(
+            model,
+            data.usage.prompt_tokens ?? 0,
+            data.usage.completion_tokens ?? 0,
+          );
+        }
+        rec.setMeta("phase", extra.tools ? "tool_round" : "final");
+        return data.choices?.[0]?.message;
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        stream: false,
-        ...extra,
-      }),
-    });
-    if (!res.ok) {
-      throw new Error(`DeepSeek API ${res.status}: ${await res.text()}`);
-    }
-    const data = (await res.json()) as { choices?: { message?: ChatMessage }[] };
-    return data.choices?.[0]?.message;
-  };
+      { provider: "deepseek" },
+    );
 
   // 第一阶段：带工具的调研循环（仅当挂了工具）。模型自行决定搜索几次。
   // 这一阶段不开 json_object（与工具调用混用不稳定），只为收集真实搜索结果。
