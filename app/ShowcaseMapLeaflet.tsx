@@ -44,8 +44,10 @@ export default function ShowcaseMapLeaflet({ dayIdx, hover, onHover, reduced }: 
         keyboard: false,
       }).setView(wgs84ToGcj02(31.318, 120.62), 12);
       map.attributionControl.setPrefix(false);
+      // scl=1 返回带中文注记的栅格瓦片（区县/街道/POI 名称）；scl=2 是纯路网无注记，
+      // 会让人「迷失方向」。style=7 为标准电子地图（注记比路网图 style=8 更全）。
       L.tileLayer(
-        "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=2&style=8&x={x}&y={y}&z={z}",
+        "https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
         {
           subdomains: "1234",
           maxZoom: 18,

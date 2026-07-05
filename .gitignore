@@ -42,3 +42,8 @@ next-env.d.ts
 
 # local screenshot, not for repo
 /截图.jpg
+
+# 数字人循环视频的原始素材（大文件，本地保留、不入库；处理后的 *-loop.mp4 才提交）
+public/avatar/xiaoxing/_raw/*.mp4
+public/avatar/xiaoxing/_raw/*.mov
+public/avatar/xiaoxing/_raw/*.webm

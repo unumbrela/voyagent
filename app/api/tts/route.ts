@@ -40,10 +40,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const audio = await provider(text);
+    const audio = await provider.synth(text);
     return new Response(audio, {
       headers: {
-        "Content-Type": "audio/mpeg",
+        "Content-Type": provider.mime,
         "Cache-Control": "no-store",
       },
     });
@@ -55,18 +55,23 @@ export async function POST(req: Request) {
 }
 
 type Synth = (text: string) => Promise<ArrayBuffer>;
+/** 合成器 + 它返回音频的 MIME（前端按此建 Blob 播放 + Web Audio 分析响度做口型） */
+type Provider = { synth: Synth; mime: string };
 
 /** 按 env 选合成器；返回 null 表示未配置 */
-function pickProvider(): Synth | null {
+function pickProvider(): Provider | null {
   const forced = (process.env.TTS_PROVIDER || "").toLowerCase();
   const has = (v?: string) => !!v && v.length > 0;
 
   if (forced === "openai" || (!forced && has(process.env.OPENAI_API_KEY)))
-    return has(process.env.OPENAI_API_KEY) ? openaiTTS : null;
+    return has(process.env.OPENAI_API_KEY) ? { synth: openaiTTS, mime: "audio/mpeg" } : null;
   if (forced === "azure" || (!forced && has(process.env.AZURE_SPEECH_KEY)))
-    return has(process.env.AZURE_SPEECH_KEY) ? azureTTS : null;
+    return has(process.env.AZURE_SPEECH_KEY) ? { synth: azureTTS, mime: "audio/mpeg" } : null;
   if (forced === "elevenlabs" || (!forced && has(process.env.ELEVENLABS_API_KEY)))
-    return has(process.env.ELEVENLABS_API_KEY) ? elevenTTS : null;
+    return has(process.env.ELEVENLABS_API_KEY) ? { synth: elevenTTS, mime: "audio/mpeg" } : null;
+  // 兜底：有 ZenMux key 就用它（OpenAI 兼容 /audio/speech，Gemini-TTS，返回 PCM → 包成 WAV）
+  if (forced === "zenmux" || (!forced && has(process.env.ZENMUX_API_KEY)))
+    return has(process.env.ZENMUX_API_KEY) ? { synth: zenmuxTTS, mime: "audio/wav" } : null;
   return null;
 }
 
@@ -117,6 +122,58 @@ const azureTTS: Synth = async (text) => {
   if (!res.ok) throw new Error(`Azure ${res.status}: ${await res.text()}`);
   return res.arrayBuffer();
 };
+
+// ── ZenMux TTS（OpenAI 兼容 /audio/speech；Gemini-TTS 只吐 PCM，服务端包成 WAV）──
+// 用户已有的 ZENMUX_API_KEY 即可发声：比浏览器 Web Speech 好听得多，且走 <audio> 可被
+// Web Audio 实时分析响度 → 数字人口型跟着真实语音开合（Web Speech 的声音无法被分析）。
+const zenmuxTTS: Synth = async (text) => {
+  const base = process.env.ZENMUX_BASE_URL || "https://zenmux.ai/api/v1";
+  const res = await fetch(`${base}/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.ZENMUX_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: process.env.TTS_MODEL || "google/gemini-3.1-flash-tts-preview",
+      // 必须用 Gemini 声线（Kore/Aoede/Leda/Puck…），OpenAI 的 alloy 会 500
+      voice: process.env.TTS_VOICE || "Kore",
+      input: text,
+      response_format: "pcm", // Gemini-TTS 仅支持 pcm（24kHz 16bit 单声道）
+    }),
+  });
+  if (!res.ok) throw new Error(`ZenMux ${res.status}: ${await res.text()}`);
+  const pcm = await res.arrayBuffer();
+  const rate = Number(process.env.TTS_PCM_RATE || 24000);
+  return pcmToWav(pcm, rate, 1, 16);
+};
+
+/** 裸 PCM(小端) → 加 44 字节 WAV 头，浏览器 <audio> 可直接播、Web Audio 可分析 */
+function pcmToWav(pcm: ArrayBuffer, sampleRate: number, channels: number, bits: number): ArrayBuffer {
+  const bytesPerSample = bits / 8;
+  const blockAlign = channels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const out = new ArrayBuffer(44 + pcm.byteLength);
+  const v = new DataView(out);
+  const put = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+  };
+  put(0, "RIFF");
+  v.setUint32(4, 36 + pcm.byteLength, true);
+  put(8, "WAVE");
+  put(12, "fmt ");
+  v.setUint32(16, 16, true); // PCM fmt chunk size
+  v.setUint16(20, 1, true); // audio format = PCM
+  v.setUint16(22, channels, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, byteRate, true);
+  v.setUint16(32, blockAlign, true);
+  v.setUint16(34, bits, true);
+  put(36, "data");
+  v.setUint32(40, pcm.byteLength, true);
+  new Uint8Array(out, 44).set(new Uint8Array(pcm));
+  return out;
+}
 
 // ── ElevenLabs TTS ──
 const elevenTTS: Synth = async (text) => {

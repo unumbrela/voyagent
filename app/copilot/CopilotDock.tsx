@@ -33,10 +33,15 @@ import {
 import type { DigitalHumanHandle, Emotion } from "./DigitalHuman";
 import { AVATAR_MODE } from "./avatar-config";
 
-// 数字人依赖 Web Audio/口型分析，仅客户端加载；chunk 加载期间给出夜空占位。
-// 形象二选一：手绘 SVG 木偶（默认）或你自己的写实立绘（NEXT_PUBLIC_AVATAR_MODE=image）。
+// 数字人仅客户端加载；chunk 加载期间给出夜空占位。
+// 形象三选一：video 真人循环视频（默认）/ image 写实立绘 / svg 手绘木偶。
 const DigitalHuman = dynamic(
-  () => (AVATAR_MODE === "image" ? import("./DigitalHumanImage") : import("./DigitalHuman")),
+  () =>
+    AVATAR_MODE === "video"
+      ? import("./DigitalHumanVideo")
+      : AVATAR_MODE === "image"
+        ? import("./DigitalHumanImage")
+        : import("./DigitalHuman"),
   {
     ssr: false,
     loading: () => (
@@ -75,16 +80,16 @@ type StreamItem =
 
 const STARTERS = [
   "帮我规划一个周末去成都的行程",
+  "小红书上成都有什么好玩好吃的？",
   "查一下目的地这几天的天气",
-  "第2天节奏太赶，帮我放慢",
   "去程有没有更早的高铁",
 ];
 
 /** 在行程页时的情境化主动建议（比通用 starter 更贴当前任务） */
 const TRIP_SUGGESTIONS = [
+  "小红书上大家怎么玩这里？",
   "帮我生成打包清单",
   "这趟行程的预算花在哪了？",
-  "查一下目的地这几天的天气",
   "第2天节奏太赶，帮我放慢",
 ];
 
@@ -471,7 +476,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ type: "spring", stiffness: 360, damping: 30 }}
-            className="no-print fixed bottom-5 right-5 z-50 flex h-[560px] max-h-[80vh] w-[380px] max-w-[92vw] origin-bottom-right flex-col overflow-hidden rounded-card border border-line bg-surface shadow-lift"
+            className="no-print fixed bottom-5 right-5 z-50 flex h-[640px] max-h-[86vh] w-[420px] max-w-[92vw] origin-bottom-right flex-col overflow-hidden rounded-card border border-line bg-surface shadow-lift"
           >
             {/* 头：暮色渐变 */}
             <div
@@ -559,7 +564,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
 
             {/* 数字人舞台（夜空极光场景） */}
             {avatarOn && (
-              <div className="relative h-44 shrink-0 overflow-hidden border-b border-line bg-[#0b1124]">
+              <div className="relative h-[320px] shrink-0 overflow-hidden border-b border-line bg-[#0b1124]">
                 <DigitalHuman
                   apiRef={dhRef}
                   muted={avatarMuted}

@@ -128,6 +128,8 @@ export default function DigitalHumanImage({
     let raf = 0;
     const t0 = performance.now();
     let mouth = 0; // 当前张嘴程度 0..1（平滑）
+    let prevEmotion: Emotion = shared.current.emotion;
+    let reactStart = -10; // 情绪切换时的「反应」起点（做一次小弹跳）
 
     const tick = (now: number) => {
       const t = (now - t0) / 1000;
@@ -165,12 +167,43 @@ export default function DigitalHumanImage({
         if (img) img.style.opacity = e === s.emotion ? mouth.toFixed(3) : "0";
       }
 
-      // 无张嘴帧时：说话用整体律动代替口型
-      if (!PERSONA.talkFrames && stageRef.current) {
-        const amp = reducedMotion ? 0 : variant === "bubble" ? 0.5 : 1;
-        const bob = s.speaking ? Math.sin(t * 9) * 1.1 * amp : 0;
-        const breathe = s.speaking ? 1 + Math.abs(Math.sin(t * 4.5)) * 0.012 * amp : 1;
-        stageRef.current.style.transform = `translateY(${bob.toFixed(2)}px) scale(${breathe.toFixed(4)})`;
+      // ── 活人微动：让静态照片始终「有生命」（呼吸/摆动/说话点头/情绪反应）──
+      // 静态真人脸最显僵硬，靠持续的细微运动破除恐怖谷。
+      if (stageRef.current) {
+        const amp = reducedMotion ? 0 : variant === "bubble" ? 0.45 : 1;
+        // 底缩放：留出平移余量（竖图 object-cover 横向无溢出，纯平移会露底），reduced 时不缩放
+        const baseScale = reducedMotion ? 1 : variant === "bubble" ? 1.03 : 1.045;
+
+        // 呼吸（两个慢频叠加，避免机械感）
+        const breathe = (Math.sin(t * 0.95) * 0.006 + Math.sin(t * 0.31 + 1) * 0.003) * amp;
+        // 待机摆动（多频叠加更有机）
+        const tx = (Math.sin(t * 0.53) + Math.sin(t * 0.31 + 1.2) * 0.6) * 1.0 * amp;
+        let ty = (Math.sin(t * 0.8 + 0.6) * 1.1 + Math.sin(t * 0.45) * 0.6) * amp;
+        let rot = Math.sin(t * 0.4) * 0.32 * amp;
+        let scale = baseScale + breathe;
+
+        // 说话：轻点头 + 更活跃摆动 + 张嘴瞬间头微沉（重音感）
+        if (s.speaking) {
+          ty += (Math.sin(t * 3.1) * 1.2 + mouth * 1.3) * amp;
+          rot += Math.sin(t * 2.15) * 0.5 * amp;
+          scale += mouth * 0.004 * amp;
+        }
+
+        // 情绪切换的一次性「反应」：轻弹跳 + 视情绪歪头
+        if (s.emotion !== prevEmotion) {
+          prevEmotion = s.emotion;
+          reactStart = t;
+        }
+        const rp = Math.max(0, 1 - (t - reactStart) * 2.2); // ~0.45s 衰减
+        if (rp > 0) {
+          const e = rp * rp;
+          scale += 0.018 * e * amp;
+          ty += -2 * e * amp;
+          rot +=
+            (s.emotion === "thinking" ? -3 : s.emotion === "happy" ? 2.2 : 0) * e * amp;
+        }
+
+        stageRef.current.style.transform = `translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px) scale(${scale.toFixed(4)}) rotate(${rot.toFixed(2)}deg)`;
       }
 
       raf = requestAnimationFrame(tick);
@@ -285,7 +318,11 @@ export default function DigitalHumanImage({
   });
 
   const objectPosition =
-    variant === "bubble" && !PERSONA.bubbleFrames ? PERSONA.bubbleFocus : "50% 50%";
+    variant === "bubble"
+      ? PERSONA.bubbleFrames
+        ? "50% 50%"
+        : PERSONA.bubbleFocus
+      : PERSONA.fullFocus;
 
   return (
     <div

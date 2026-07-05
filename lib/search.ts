@@ -24,11 +24,13 @@ const TAVILY_URL = "https://api.tavily.com/search";
 /**
  * 执行一次 web 搜索；无 key 时返回空数组（由调用方决定如何降级）。
  * includeRaw=true 时请求整页原文（车次时刻表这类需要完整列表的场景用）。
+ * includeDomains 非空时把结果限定在这些域内（如只看 xiaohongshu.com）。
  */
 export async function webSearch(
   query: string,
   maxResults = 5,
   includeRaw = false,
+  includeDomains?: string[],
 ): Promise<SearchResult[]> {
   const key = process.env.TAVILY_API_KEY;
   if (!key) return [];
@@ -42,6 +44,7 @@ export async function webSearch(
       max_results: maxResults,
       search_depth: includeRaw ? "advanced" : "basic",
       include_raw_content: includeRaw,
+      ...(includeDomains?.length ? { include_domains: includeDomains } : {}),
     }),
   });
 

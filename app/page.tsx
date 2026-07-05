@@ -4,7 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { motion, useInView, useMotionValue, useSpring } from "motion/react";
+import {
+  motion,
+  useInView,
+  useMotionValue,
+  useSpring,
+  useScroll,
+  useTransform,
+  useMotionTemplate,
+  useReducedMotion,
+} from "motion/react";
 import { logEvent } from "@/lib/log";
 import {
   Map as MapIcon,
@@ -49,6 +58,37 @@ export default function Home() {
   // 目的地：受控，便于「地图点选」多模态回填；默认表单也照常读它
   const [destination, setDestination] = useState("");
   const [showMap, setShowMap] = useState(false);
+
+  // ── Hero 指针视差：光标在夜空里移动，产品预览随之 3D 微倾，一束青瓷光跟随光标 ──
+  const reduceMotion = useReducedMotion();
+  const hpx = useMotionValue(0); // 横向 -0.5 → 0.5
+  const hpy = useMotionValue(0); // 纵向 -0.5 → 0.5
+  const hsx = useSpring(hpx, { stiffness: 120, damping: 20 });
+  const hsy = useSpring(hpy, { stiffness: 120, damping: 20 });
+  const mockRotateY = useTransform(hsx, [-0.5, 0.5], [7, -7]);
+  const mockRotateX = useTransform(hsy, [-0.5, 0.5], [-6, 6]);
+  const mockShiftX = useTransform(hsx, [-0.5, 0.5], [-12, 12]);
+  const glowX = useTransform(hsx, [-0.5, 0.5], ["32%", "68%"]);
+  const glowY = useTransform(hsy, [-0.5, 0.5], ["28%", "72%"]);
+  const heroGlow = useMotionTemplate`radial-gradient(360px circle at ${glowX} ${glowY}, rgba(47,212,198,0.18), transparent 68%)`;
+  function onHeroMove(e: React.MouseEvent<HTMLElement>) {
+    if (reduceMotion) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    hpx.set((e.clientX - r.left) / r.width - 0.5);
+    hpy.set((e.clientY - r.top) / r.height - 0.5);
+  }
+  function onHeroLeave() {
+    hpx.set(0);
+    hpy.set(0);
+  }
+
+  // 顶部滚动进度极光细条
+  const { scrollYProgress } = useScroll();
+  const progressX = useSpring(scrollYProgress, {
+    stiffness: 120,
+    damping: 30,
+    mass: 0.3,
+  });
 
   // 仅发起浏览器定位请求；setState 只在异步回调里发生（不在 effect 里同步 setState）。
   function requestGeo() {
@@ -146,13 +186,31 @@ export default function Home() {
 
   return (
     <main className="flex-1">
+      {/* 顶部滚动进度：极光渐变细条，随页面推进拉伸 */}
+      <motion.div
+        className="fixed inset-x-0 top-0 z-[60] h-[3px] origin-left"
+        style={{
+          scaleX: progressX,
+          background:
+            "linear-gradient(90deg, var(--aurora-teal), var(--aurora-violet) 55%, var(--aurora-amber))",
+        }}
+        aria-hidden
+      />
       {/* ── HERO：暮色夜空 + 极光（可选影像层 /bg/hero.jpg 自动垫底） ── */}
       <section
         className="night"
         style={{ "--night-img": "url(/bg/hero.jpg)" } as React.CSSProperties}
+        onMouseMove={onHeroMove}
+        onMouseLeave={onHeroLeave}
       >
         <div className="night-stars" aria-hidden />
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pb-28 pt-28 lg:grid-cols-[1.05fr_0.95fr] lg:pb-36 lg:pt-32">
+        {/* 跟随光标的青瓷柔光（极光在近处的回响） */}
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{ background: heroGlow }}
+          aria-hidden
+        />
+        <div className="relative z-10 mx-auto grid max-w-6xl items-center gap-12 px-6 pb-28 pt-28 lg:grid-cols-[1.05fr_0.95fr] lg:pb-36 lg:pt-32">
           <motion.div initial="hidden" animate="show">
             <motion.p
               variants={rise}
@@ -181,13 +239,16 @@ export default function Home() {
                   preserveAspectRatio="none"
                   aria-hidden
                 >
-                  <path
+                  <motion.path
                     d="M3 7c40-4 118-5 194-2"
                     fill="none"
                     stroke="var(--aurora-amber)"
                     strokeWidth="4"
                     strokeLinecap="round"
                     opacity="0.9"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ delay: 0.6, duration: 0.7, ease: "easeInOut" }}
                   />
                 </svg>
               </span>
@@ -234,19 +295,72 @@ export default function Home() {
             </motion.p>
           </motion.div>
 
-          {/* 产品预览：白色应用窗口浮在夜空上（发光投影） */}
+          {/* 产品预览：白色应用窗口浮在夜空上（进场 → 缓慢浮动 → 指针 3D 微倾，三层解耦互不打架） */}
           <motion.div
-            initial={{ opacity: 0, y: 28, rotate: 0.8 }}
-            animate={{ opacity: 1, y: 0, rotate: 0 }}
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              filter: "drop-shadow(0 24px 60px rgba(4,10,30,0.6))",
-            }}
+            style={{ perspective: 1200 }}
           >
-            <HeroMock />
+            <motion.div
+              animate={reduceMotion ? undefined : { y: [0, -9, 0] }}
+              transition={
+                reduceMotion
+                  ? undefined
+                  : { duration: 6.5, repeat: Infinity, ease: "easeInOut" }
+              }
+            >
+              <motion.div
+                style={{
+                  rotateX: mockRotateX,
+                  rotateY: mockRotateY,
+                  x: mockShiftX,
+                  transformStyle: "preserve-3d",
+                  filter: "drop-shadow(0 24px 60px rgba(4,10,30,0.6))",
+                }}
+              >
+                <HeroMock />
+              </motion.div>
+            </motion.div>
           </motion.div>
         </div>
         <div className="night-curve" aria-hidden />
+      </section>
+
+      {/* ── 灵感灯箱：精选目的地图墙（点卡片即带入下方表单） ── */}
+      <section className="isolate relative overflow-hidden border-b border-line/60">
+        <div
+          className="glow-spot glow-spot--amber -right-40 top-6 h-[26rem] w-[26rem]"
+          aria-hidden
+        />
+        <div
+          className="glow-spot glow-spot--teal -left-36 bottom-0 h-[24rem] w-[24rem]"
+          aria-hidden
+        />
+        <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div className="mx-auto max-w-2xl text-center">
+            <span className="ed-eyebrow justify-center">灵感灯箱 · 想去哪</span>
+            <h2 className="font-serif mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+              挑一个目的地，即刻启程
+            </h2>
+            <p className="mt-3 text-lg text-muted">
+              点开任意一站，目的地自动填入下方表单，8 位 AI 专家立刻为你排出逐日行程。
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
+            {DESTINATIONS.map((d, i) => (
+              <DestinationCard
+                key={d.slug}
+                d={d}
+                index={i}
+                onPick={(q) => {
+                  setDestination(q);
+                  logEvent("destination_pick_gallery", { name: q, via: "gallery" });
+                }}
+              />
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ── "行程与地图，一屏尽览" 展示带 ── */}
@@ -324,7 +438,7 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 8 位专家 chips */}
+          {/* 8 位专家 chips：随滚动逐枚弹入，hover 点亮为主色 */}
           <div className="mt-8 flex flex-wrap gap-2">
             {[
               "目的地调研",
@@ -335,13 +449,21 @@ export default function Home() {
               "交通接驳",
               "综合行程",
               "出行质检",
-            ].map((f) => (
-              <span
+            ].map((f, i) => (
+              <motion.span
                 key={f}
-                className="rounded-pill border border-line bg-surface px-3 py-1.5 text-sm font-medium text-muted"
+                initial={{ opacity: 0, y: 8, scale: 0.94 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{
+                  delay: 0.04 * i,
+                  duration: 0.32,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                className="cursor-default rounded-pill border border-line bg-surface px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:border-teal/50 hover:bg-teal-tint hover:text-teal-dark"
               >
                 {f}
-              </span>
+              </motion.span>
             ))}
           </div>
         </div>
@@ -727,6 +849,176 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
     desc: "按目的地天气与活动智能生成打包清单，出发前一项不落。",
   },
 ];
+
+/** 精选目的地：图墙数据。slug 对应 public/destinations/<slug>.jpg（见该目录 README 的生成提示词）。
+ *  query 为点卡片后带入「目的地」表单的字段；featured 卡片右上角盖「AI 精选」印章。 */
+type Destination = {
+  slug: string;
+  name: string;
+  en: string;
+  tagline: string;
+  query: string;
+  featured?: boolean;
+};
+
+const DESTINATIONS: Destination[] = [
+  {
+    slug: "suzhou",
+    name: "苏州",
+    en: "SUZHOU",
+    tagline: "园林深处，枕河人家",
+    query: "苏州",
+    featured: true,
+  },
+  {
+    slug: "kyoto",
+    name: "京都",
+    en: "KYOTO",
+    tagline: "千年古都，红叶千鸟居",
+    query: "京都",
+  },
+  {
+    slug: "yading",
+    name: "稻城亚丁",
+    en: "YADING",
+    tagline: "雪山圣湖，蓝色星球的净土",
+    query: "稻城亚丁",
+  },
+  {
+    slug: "iceland",
+    name: "冰岛",
+    en: "ICELAND",
+    tagline: "极光旷野，冰与火之地",
+    query: "冰岛",
+    featured: true,
+  },
+  {
+    slug: "santorini",
+    name: "圣托里尼",
+    en: "SANTORINI",
+    tagline: "爱琴海落日，蓝白之城",
+    query: "圣托里尼",
+  },
+  {
+    slug: "morocco",
+    name: "摩洛哥",
+    en: "MOROCCO",
+    tagline: "撒哈拉沙丘，暖色秘境",
+    query: "摩洛哥",
+  },
+];
+
+/** 目的地卡：竖幅实景照 + 底部渐深遮罩 + 衬线地名；hover 抬升并浮出「规划这里」。
+ *  照片缺失（尚未生成）时降级为青瓷→琥珀柔和渐变占位，绝不裂图。 */
+function DestinationCard({
+  d,
+  index,
+  onPick,
+}: {
+  d: Destination;
+  index: number;
+  onPick: (query: string) => void;
+}) {
+  const [imgOk, setImgOk] = useState(true);
+  // 指针 3D 微倾：光标位置 → 卡片朝光标翘起（弹簧回中），比纯 CSS 更有实体感
+  const reduce = useReducedMotion();
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+  const rx = useSpring(useTransform(py, [-0.5, 0.5], [6.5, -6.5]), {
+    stiffness: 150,
+    damping: 15,
+  });
+  const ry = useSpring(useTransform(px, [-0.5, 0.5], [-6.5, 6.5]), {
+    stiffness: 150,
+    damping: 15,
+  });
+  function onMove(e: React.MouseEvent<HTMLElement>) {
+    if (reduce) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    px.set((e.clientX - r.left) / r.width - 0.5);
+    py.set((e.clientY - r.top) / r.height - 0.5);
+  }
+  function onLeave() {
+    px.set(0);
+    py.set(0);
+  }
+  return (
+    <motion.a
+      href="#plan"
+      onClick={() => onPick(d.query)}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ delay: 0.05 * (index % 3), duration: 0.45 }}
+      style={{ rotateX: rx, rotateY: ry, transformPerspective: 800 }}
+      className="group relative block overflow-hidden rounded-card border border-line bg-surface-2 shadow-soft transition-[box-shadow,border-color] duration-300 hover:border-teal/45 hover:shadow-lift"
+      aria-label={`规划前往${d.name}的行程`}
+    >
+      <div className="relative aspect-[4/5] w-full overflow-hidden">
+        {imgOk ? (
+          <img
+            src={`/destinations/${d.slug}.jpg`}
+            alt={d.name}
+            loading="lazy"
+            onError={() => setImgOk(false)}
+            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
+          />
+        ) : (
+          // 照片未就绪的占位：柔和色晕 + 定位针，观感仍是「有意为之」
+          <div
+            className="grid h-full w-full place-items-center"
+            style={{
+              background:
+                "linear-gradient(150deg, color-mix(in srgb, var(--teal) 22%, #fff), color-mix(in srgb, var(--aurora-amber) 26%, #fff))",
+            }}
+          >
+            <MapPin className="h-7 w-7 text-white/80" aria-hidden />
+          </div>
+        )}
+        {/* 顶部微遮罩：在亮顶照片上也托住右上角印章 */}
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-24"
+          style={{
+            background: "linear-gradient(to bottom, rgba(11,17,36,0.42), transparent)",
+          }}
+        />
+        {/* 底部主遮罩：保证白字在任意照片上都可读 */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(11,17,36,0.9), rgba(11,17,36,0.22) 44%, rgba(11,17,36,0) 70%)",
+          }}
+        />
+        {d.featured && (
+          <span className="seal-stamp absolute right-3 top-3 bg-white/85 backdrop-blur">
+            AI 精选
+          </span>
+        )}
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2.5 p-3.5 sm:p-4">
+          <div className="min-w-0">
+            <p className="font-data text-[10px] font-medium tracking-[0.22em] text-white/75">
+              {d.en}
+            </p>
+            <h3 className="font-serif text-lg font-bold leading-tight text-white sm:text-xl">
+              {d.name}
+            </h3>
+            <p className="mt-1 text-xs leading-snug text-white/85">{d.tagline}</p>
+          </div>
+          {/* 常驻圆形箭头：明确「点即规划」，hover 时填青瓷并右移 */}
+          <span
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/25 bg-white/10 text-white backdrop-blur transition-all duration-300 group-hover:translate-x-0.5 group-hover:border-transparent group-hover:bg-teal sm:h-9 sm:w-9"
+            aria-hidden
+          >
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      </div>
+    </motion.a>
+  );
+}
 
 /** 产品预览窗口：左行程列表 + 右迷你地图（呼应「行程+地图」双栏视图）。 */
 function HeroMock() {

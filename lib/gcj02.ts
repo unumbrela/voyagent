@@ -46,3 +46,19 @@ export function wgs84ToGcj02(lat: number, lon: number): [number, number] {
   dLon = (dLon * 180) / ((A / sqrtMagic) * Math.cos(radLat) * Math.PI);
   return [lat + dLat, lon + dLon];
 }
+
+/**
+ * [lat, lon] GCJ-02 → [lat, lon] WGS-84（正变换无闭式逆，用不动点迭代逼近，
+ * 3 次即收敛到 <1m）。用于「从高德地图上点选/读回的坐标」还原成真实坐标。
+ */
+export function gcj02ToWgs84(lat: number, lon: number): [number, number] {
+  if (outOfChina(lat, lon)) return [lat, lon];
+  let wLat = lat;
+  let wLon = lon;
+  for (let i = 0; i < 3; i++) {
+    const [gLat, gLon] = wgs84ToGcj02(wLat, wLon);
+    wLat += lat - gLat;
+    wLon += lon - gLon;
+  }
+  return [wLat, wLon];
+}

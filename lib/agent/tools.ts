@@ -11,6 +11,7 @@ import { searchTrains, searchFlights } from "@/lib/transport";
 import { fetchWeather } from "@/lib/weather-fetch";
 import { normalizeCandidates } from "@/lib/candidates";
 import { runWebSearchTool } from "@/lib/search";
+import { researchXhs, isXhsUrl } from "@/lib/xhs/research";
 import { runRefine } from "@/lib/agents/refine";
 import { runPacking } from "@/lib/agents/packing";
 import { createTrip } from "@/lib/trips";
@@ -235,6 +236,51 @@ export const TOOLS: Record<string, ToolDef> = {
       if (!query) return "缺少搜索词。";
       ctx.emit({ type: "tool_call", name: "web_search", label: `搜索「${query}」` });
       return await runWebSearchTool(JSON.stringify({ query }));
+    },
+  },
+
+  // ── 小红书攻略提炼（目的地驱动，聚合多篇社区帖子）──
+  research_xhs: {
+    def: {
+      type: "function",
+      function: {
+        name: "research_xhs",
+        description:
+          "聚合小红书等社区的多篇帖子，为某个目的地提炼结构化玩法/美食攻略（含最佳时段、建议天数、实用贴士与避坑）。" +
+          "用户问「小红书上怎么玩 X / X 有什么好玩好吃的 / 网友都去哪」、或想参考社区玩法时调用；" +
+          "目的地缺省用当前行程目的地。会把结果做成可一键加入行程的卡片。",
+        parameters: obj(
+          {
+            destination: { type: "string", description: "目的地城市，缺省用当前行程目的地" },
+            focus: { type: "string", description: "聚焦方向（可空），如 美食/citywalk/亲子/小众/夜生活" },
+          },
+          [],
+        ),
+      },
+    },
+    run: async (args, ctx) => {
+      const destination =
+        S(args.destination) || ctx.appState.meta?.destination || "";
+      if (!destination)
+        return "还不知道要看哪个城市的小红书攻略，先告诉我目的地吧。";
+      const focus = S(args.focus);
+      ctx.emit({
+        type: "tool_call",
+        name: "research_xhs",
+        label: `翻小红书上的${destination}${focus ? `·${focus}` : ""}热门玩法…`,
+      });
+      const result = await researchXhs(destination, focus);
+      if ("error" in result) return result.error;
+      ctx.emit({
+        type: "tool_result",
+        name: "research_xhs",
+        card: { kind: "xhs_guide", guide: result },
+      });
+      const xhsN = result.sources.filter((s) => isXhsUrl(s.url)).length;
+      const srcNote = xhsN
+        ? `参考了 ${result.sources.length} 篇网友攻略（含 ${xhsN} 篇小红书）`
+        : `参考了 ${result.sources.length} 篇网友攻略（本次小红书原帖召回较少，已用其他网友攻略补充）`;
+      return `已整理「${destination}」的玩法攻略：${result.spots.length} 个玩法、${result.eats.length} 处美食，${srcNote}，已在界面展示卡片（用户可一键加入行程）。`;
     },
   },
 

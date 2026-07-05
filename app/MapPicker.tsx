@@ -4,13 +4,16 @@
  * 地图点选目的地（多模态输入，可选）。
  *
  * 在地图上点击一个位置 → 反地理编码（BigDataCloud，免 key、支持 CORS，返回中文地名）
- * → 通过 onPick 回填到首页目的地输入框。用 Leaflet + CARTO 免 key 瓦片（与行程地图一致）。
- * 用 divIcon 自绘标记，避免默认 marker 图标资源 404。仅客户端加载（首页以 dynamic ssr:false 引入）。
+ * → 通过 onPick 回填到首页目的地输入框。用 Leaflet + 高德中文瓦片（与首页/行程地图一致）。
+ * 高德是 GCJ-02 加偏坐标：落图中心须 wgs84→gcj02；点选读回的 e.latlng 是 GCJ-02，
+ * 反查地名/回填前须 gcj02→wgs84 还原成真实坐标。用 divIcon 自绘标记避免默认图标 404。
+ * 仅客户端加载（首页以 dynamic ssr:false 引入）。
  */
 
 import { useEffect, useRef, useState } from "react";
 import type { Map as LMap, Marker, LeafletMouseEvent } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { wgs84ToGcj02, gcj02ToWgs84 } from "@/lib/gcj02";
 
 /** 经纬度 → 中文地名（城市优先）；失败返回 null，绝不虚构 */
 async function reverseGeocode(lat: number, lon: number): Promise<string | null> {
@@ -59,14 +62,15 @@ export default function MapPicker({
         zoomControl: true,
         scrollWheelZoom: true,
         attributionControl: true,
-      }).setView([35, 105], 4); // 默认落在中国范围
+      }).setView([35, 105], 4); // 默认落在中国范围（GCJ 偏移在 z4 属亚像素，无需转换）
+      // 高德中文瓦片（scl=1 含区县/街道注记，style=7 标准电子图）；与首页/行程地图一致
       L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        "https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
         {
-          subdomains: "abcd",
-          maxZoom: 19,
-          attribution:
-            '&copy; <a href="https://openstreetmap.org">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          subdomains: "1234",
+          maxZoom: 18,
+          className: "sc-tiles",
+          attribution: '&copy; <a href="https://amap.com">高德地图</a>',
         },
       ).addTo(map);
 
@@ -79,15 +83,17 @@ export default function MapPicker({
       });
 
       map.on("click", async (e: LeafletMouseEvent) => {
-        const { lat, lng } = e.latlng;
+        const { lat, lng } = e.latlng; // 高德画布坐标 = GCJ-02
         if (markerRef.current) markerRef.current.setLatLng([lat, lng]);
         else markerRef.current = L.marker([lat, lng], { icon: pin }).addTo(map);
+        // 还原真实坐标：反查地名/回填都用 WGS-84（针脚仍落在点击处 GCJ）
+        const [wLat, wLon] = gcj02ToWgs84(lat, lng);
         setStatus("正在解析地名…");
         try {
-          const name = await reverseGeocode(lat, lng);
+          const name = await reverseGeocode(wLat, wLon);
           if (name) {
             setStatus(`已选：${name}`);
-            onPickRef.current(name, lat, lng);
+            onPickRef.current(name, wLat, wLon);
           } else {
             setStatus("未能解析该点地名，可换个点或手动填写。");
           }
@@ -113,7 +119,7 @@ export default function MapPicker({
           };
           const p = data.center || data.points?.[q];
           if (p && mapRef.current && !disposed) {
-            mapRef.current.setView([p.lat, p.lon], 10);
+            mapRef.current.setView(wgs84ToGcj02(p.lat, p.lon), 10);
           }
         } catch {
           // 忽略：定位中心只是便利，不影响点选

@@ -6,6 +6,7 @@ import type { TrainOption, FlightOption } from "@/lib/transport";
 import type { DayWeather } from "@/lib/weather";
 import type { Candidate } from "@/lib/candidates";
 import type { ItineraryDiff } from "@/lib/diff";
+import type { XhsGuide } from "@/lib/xhs/types";
 
 /** 行程条目/天（与 page.tsx 的 ItineraryItem/Day 对齐；此处作为前后端契约） */
 export interface ItinItem {
@@ -74,7 +75,8 @@ export type Card =
       items: FlightOption[];
     }
   | { kind: "weather"; dest: string; daily: Record<string, DayWeather> }
-  | { kind: "candidates"; items: Candidate[] };
+  | { kind: "candidates"; items: Candidate[] }
+  | { kind: "xhs_guide"; guide: XhsGuide };
 
 /** AG-UI 风格事件流（服务端 → 前端，SSE 逐条推送） */
 export type AgentEvent =

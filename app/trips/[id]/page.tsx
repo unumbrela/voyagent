@@ -21,6 +21,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { TimelineRail, RAIL_X } from "./Timeline";
 import { TripHero, AnimatedNumber } from "./arc";
 import { SectionNav } from "./SectionNav";
+import { XhsGuidePanel } from "./XhsGuidePanel";
+import type { XhsGuide } from "@/lib/xhs/types";
 // 按天配色：全站统一取自 lib/palette（地点卡编号针 ↔ 地图针一致）
 import { dayColorOf } from "@/lib/palette";
 import { Panel } from "@/app/ui/collapse";
@@ -40,6 +42,7 @@ import {
   Microscope,
   MessageCircle,
   Bookmark,
+  Lightbulb,
   Map as MapSectionIcon,
   MapPin,
   Printer,
@@ -160,6 +163,29 @@ function candidateToItem(c: Candidate): ItineraryItem {
   };
 }
 
+/** 地图建议层用的推荐点（与 TripMap 的 MapSpot 结构对齐） */
+interface MapSpot {
+  title: string;
+  kind: string;
+  reason?: string;
+  area?: string;
+  source_url?: string;
+}
+/** 攻略 → 地图建议点：玩法记为 activity、美食记为 food */
+function guideToSpots(g: XhsGuide): MapSpot[] {
+  const pick = (s: XhsGuide["spots"][number], kind: string): MapSpot => ({
+    title: s.title,
+    kind,
+    reason: s.reason || undefined,
+    area: s.area || undefined,
+    source_url: s.source_url || undefined,
+  });
+  return [
+    ...g.spots.map((s) => pick(s, "activity")),
+    ...g.eats.map((s) => pick(s, "food")),
+  ];
+}
+
 export default function TripPage() {
   const { id } = useParams<{ id: string }>();
   const [phase, setPhase] = useState<Phase>("loading");
@@ -182,6 +208,8 @@ export default function TripPage() {
   const [references, setReferences] = useState<Reference[]>([]);
   const [chatHistory, setChatHistory] = useState<ChatMsg[]>([]);
   const [weather, setWeather] = useState<Record<string, DayWeather>>({});
+  // 灵感攻略推荐点（由 XhsGuidePanel 上抛）→ 传给地图作独立建议层
+  const [xhsSpots, setXhsSpots] = useState<MapSpot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -758,6 +786,7 @@ export default function TripPage() {
                     })),
                   },
                   { id: "budget", label: "预算成本", icon: Wallet },
+                  { id: "inspiration", label: "灵感攻略", icon: Lightbulb },
                   { id: "explore", label: "探索备选", icon: Compass },
                   { id: "packing", label: "打包清单", icon: Luggage },
                   { id: "tune", label: "偏好调节", icon: SlidersHorizontal },
@@ -784,6 +813,20 @@ export default function TripPage() {
                     syncDay={focusDay}
                     spot={spot}
                     onLocateItem={locateInList}
+                    spots={xhsSpots}
+                    onAddSpot={(s) => {
+                      addCandidate(0, {
+                        time: "",
+                        title: s.title,
+                        kind: s.kind,
+                        detail: [s.area, s.reason].filter(Boolean).join(" · "),
+                        est_cost: 0,
+                        ...(s.reason ? { why: s.reason } : {}),
+                        ...(s.source_url ? { source_url: s.source_url } : {}),
+                      });
+                      toast(`已加入第 ${days[0]?.day ?? 1} 天：${s.title}`);
+                      logEvent("xhs_add", { via: "map", kind: s.kind }, id);
+                    }}
                   />
                 )}
               </div>
@@ -933,6 +976,19 @@ export default function TripPage() {
               {days.length > 0 && (
                 <section id="budget" className="wl-section">
                   <BudgetPanel summary={budgetSummary} partySize={partySize} days={days} />
+                </section>
+              )}
+
+              {/* 灵感攻略：目的地驱动，自动聚合小红书等社区攻略，可一键加入某天 */}
+              {days.length > 0 && (
+                <section id="inspiration" className="wl-section">
+                  <XhsGuidePanel
+                    id={id}
+                    destination={meta.destination}
+                    days={days}
+                    onAdd={(dayIdx, item) => addCandidate(dayIdx, item)}
+                    onGuide={(g) => setXhsSpots(g ? guideToSpots(g) : [])}
+                  />
                 </section>
               )}
 
