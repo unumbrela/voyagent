@@ -78,6 +78,8 @@ export default function TripMap({
   hoverKey = null,
   onHoverKey,
   syncDay,
+  spot = null,
+  onLocateItem,
 }: {
   days: Day[];
   meta: Meta;
@@ -91,6 +93,10 @@ export default function TripMap({
   onHoverKey?: (key: string | null) => void;
   /** 滚动联动：页面滚到第几天就聚焦第几天（null=全程）。undefined 表示不启用 */
   syncDay?: number | null;
+  /** 触屏定位：设置后 flyTo 该条目针脚并打开弹窗（每次点按传新对象以重复触发） */
+  spot?: { key: string } | null;
+  /** 弹窗里「在行程中查看」被点时回传条目 key（页面滚回对应条目） */
+  onLocateItem?: (key: string) => void;
 }) {
   // 用「标题序列」作为签名：只有地点真正变化才重新 geocode（编辑时间/花费不触发）
   const signature = useMemo(
@@ -119,11 +125,16 @@ export default function TripMap({
     if (syncDay !== undefined) setSelectedDay(syncDay);
   }
 
-  // onHoverKey 用 ref 持有：marker 事件只绑一次，不随回调身份变化重建
+  // 回调用 ref 持有：marker 事件只绑一次，不随回调身份变化重建
   const onHoverKeyRef = useRef(onHoverKey);
+  const onLocateItemRef = useRef(onLocateItem);
   useEffect(() => {
     onHoverKeyRef.current = onHoverKey;
+    onLocateItemRef.current = onLocateItem;
   });
+  // 最近一次触屏定位（5s 窗口）：定位引发的页面滚动会让 syncDay 变化触发重绘，
+  // 重绘销毁旧针脚并 fitBounds 复位——重绘结束后据此补聚焦，保证定位不被打断
+  const spotRef = useRef<{ key: string; ts: number } | null>(null);
 
   // ── 地点 → 坐标 ──
   useEffect(() => {
@@ -254,19 +265,23 @@ export default function TripMap({
     const allLatLng: [number, number][] = [];
     const focusLatLng: [number, number][] = [];
 
+    // 掉落进场（与落地页演示一致）：按落图顺序错峰，reduced-motion 由全局 CSS 钳制
+    let dropIdx = 0;
     const pin = (
       color: string,
       label: string,
       dim: boolean,
       size = 30,
-    ) =>
-      L.divIcon({
+    ) => {
+      const delay = Math.min(dropIdx++ * 60, 720);
+      return L.divIcon({
         className: "",
-        html: `<div class="tp-pin${dim ? " tp-dim" : ""}" style="--c:${color}"><div class="tp-pin-inner"><span>${label}</span></div></div>`,
+        html: `<div class="tp-pin tp-drop${dim ? " tp-dim" : ""}" style="--c:${color};animation-delay:${delay}ms"><div class="tp-pin-inner"><span>${label}</span></div></div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size - 2],
         popupAnchor: [0, -size + 4],
       });
+    };
 
     const esc = (s: string) =>
       (s ?? "").replace(/[&<>"]/g, (c) =>
@@ -325,9 +340,21 @@ export default function TripMap({
              ${r.time ? `<div class="tp-pop-time">${esc(r.time)}</div>` : ""}
              ${r.detail ? `<div class="tp-pop-d">${esc(r.detail)}</div>` : ""}
              ${r.est_cost ? `<div class="tp-pop-c">约 ¥${r.est_cost}</div>` : ""}
+             <button type="button" class="tp-pop-go">在行程中查看 ↓</button>
            </div>`,
           { className: "tp-pop-wrap" },
         );
+        // 弹窗「在行程中查看」→ 页面滚回该条目（触屏的针脚→列表反向联动）
+        m.on("popupopen", () => {
+          m.getPopup()
+            ?.getElement()
+            ?.querySelector(".tp-pop-go")
+            ?.addEventListener(
+              "click",
+              () => onLocateItemRef.current?.(r.key),
+              { once: true },
+            );
+        });
         // 悬停轻提示 + 双向联动（点击仍是详情弹窗）；direction auto 避免贴边裁切
         m.bindTooltip(`${r.time ? `${esc(r.time)} · ` : ""}${esc(r.title)}`, {
           direction: "auto",
@@ -340,6 +367,18 @@ export default function TripMap({
         allLatLng.push([r.pt.lat, r.pt.lon]);
         if (focused === day) focusLatLng.push([r.pt.lat, r.pt.lon]);
       });
+    }
+
+    // 触屏定位窗口期内：跳过视图自适应，改为聚焦目标针脚并开弹窗
+    const sp = spotRef.current;
+    const spotMarker =
+      sp && Date.now() - sp.ts < 5000 ? markerByKey.current.get(sp.key) : null;
+    if (spotMarker) {
+      map.setView(spotMarker.getLatLng(), Math.max(map.getZoom(), 15), {
+        animate: true,
+      });
+      window.setTimeout(() => spotMarker.openPopup(), 350);
+      return;
     }
 
     // 视图自适应
@@ -364,6 +403,18 @@ export default function TripMap({
     }
     // resolved/selectedDay 变化会重建 marker，需重放当前 hover 态
   }, [hoverKey, resolved, selectedDay]);
+
+  // ── 触屏定位：flyTo 目标针脚并打开弹窗（spot 每次是新对象，可重复触发同一条目）──
+  useEffect(() => {
+    if (!spot) return;
+    spotRef.current = { key: spot.key, ts: Date.now() };
+    const m = markerByKey.current.get(spot.key);
+    const map = mapRef.current;
+    if (!m || !map) return;
+    map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.8 });
+    const t = window.setTimeout(() => m.openPopup(), 850);
+    return () => window.clearTimeout(t);
+  }, [spot]);
 
   const dayNumbers = useMemo(
     () => Array.from(new Set(resolved.map((r) => r.day))).sort((a, b) => a - b),
@@ -393,7 +444,10 @@ export default function TripMap({
       {dayNumbers.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <button
-            onClick={() => setSelectedDay(null)}
+            onClick={() => {
+              spotRef.current = null;
+              setSelectedDay(null);
+            }}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
               selectedDay === null
                 ? "border-ink bg-ink text-white"
@@ -408,7 +462,10 @@ export default function TripMap({
             return (
               <button
                 key={d}
-                onClick={() => setSelectedDay(active ? null : d)}
+                onClick={() => {
+                  spotRef.current = null;
+                  setSelectedDay(active ? null : d);
+                }}
                 className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
                   active
                     ? "text-white"

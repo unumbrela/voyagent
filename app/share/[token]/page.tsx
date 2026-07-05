@@ -56,13 +56,21 @@ export default async function SharePage({
       .single(),
     admin
       .from("itineraries")
-      .select("days, references_data")
+      // select * 而非点名列：title/overview 属 0008 迁移，未应用时点名会整条报错
+      .select("*")
       .eq("trip_id", trip.id)
       .maybeSingle(),
   ]);
 
-  const days = (itin?.days as Day[] | null) ?? [];
-  const references = (itin?.references_data as Ref[] | null) ?? [];
+  const itinRow = (itin ?? {}) as Record<string, unknown>;
+  const days = (itinRow.days as Day[] | null) ?? [];
+  const references = (itinRow.references_data as Ref[] | null) ?? [];
+  const storedTitle =
+    typeof itinRow.title === "string" && itinRow.title ? itinRow.title : null;
+  const overview =
+    typeof itinRow.overview === "string" && itinRow.overview
+      ? itinRow.overview
+      : null;
   if (!days.length) notFound();
 
   const budget = summarizeBudget(
@@ -87,8 +95,16 @@ export default async function SharePage({
             {dest || "行程"} · 只读分享
           </p>
           <h1 className="font-serif mt-2 text-3xl font-black leading-tight text-white">
-            {dest} 行程
+            {storedTitle || `${dest} 行程`}
           </h1>
+          {overview && (
+            <p
+              className="mt-3 max-w-xl text-sm leading-relaxed"
+              style={{ color: "var(--night-muted)" }}
+            >
+              {overview}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {dateRange && (
               <span className="font-data inline-flex items-center gap-1.5 rounded-pill border border-white/18 bg-white/[0.09] px-3 py-1 text-sm font-medium text-white/85 backdrop-blur">

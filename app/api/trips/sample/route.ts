@@ -40,6 +40,15 @@ export async function POST() {
     });
     if (itinErr) throw new Error(`写入示例行程失败: ${itinErr.message}`);
 
+    // title/overview 分开写：0008 迁移未应用时静默跳过（页面回退到「苏州 行程」）
+    const { error: metaErr } = await supabase
+      .from("itineraries")
+      .update({ title: sample.title, overview: sample.overview })
+      .eq("trip_id", id);
+    if (metaErr) {
+      console.warn("[sample] title/overview 落库失败（未应用 0008 迁移？）", metaErr.message);
+    }
+
     const { error: stErr } = await supabase
       .from("trips")
       .update({ status: "done" })

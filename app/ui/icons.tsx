@@ -52,6 +52,7 @@ export {
   Send,
   Mic,
   MicOff,
+  Keyboard,
   Volume2,
   VolumeX,
   Trash2,

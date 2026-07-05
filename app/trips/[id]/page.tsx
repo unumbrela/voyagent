@@ -30,6 +30,7 @@ import { ConfirmModal } from "@/app/ui/modal";
 import { toast } from "@/app/ui/toast";
 import { ListSkeleton } from "@/app/ui/skeleton";
 import { ProposalCard } from "@/app/ui/proposal";
+import { Markdown } from "@/app/ui/markdown";
 import {
   CalendarDays,
   Compass,
@@ -40,6 +41,7 @@ import {
   MessageCircle,
   Bookmark,
   Map as MapSectionIcon,
+  MapPin,
   Printer,
   Link2,
   Share2,
@@ -192,6 +194,8 @@ export default function TripPage() {
   // SSE 断流（网络中断/函数超时）：主动断开并让用户手动重试，
   // 避免 EventSource 自动重连不受控地重触发流水线（断点续跑保证重试安全）
   const [streamLost, setStreamLost] = useState(false);
+  // 出炉仪式：done 后先「行程已就绪」盖章，再展开成品（reduced-motion 直切）
+  const [ceremony, setCeremony] = useState(false);
 
   const openPlanStream = useCallback(() => {
     setStreamLost(false);
@@ -216,9 +220,18 @@ export default function TripPage() {
         setOverview(it?.overview ?? "");
         setDays(normalizeDays(it?.days ?? []));
         setReferences(it?.references ?? []);
-        setPhase("ready");
         logEvent("plan_done", { days: it?.days?.length ?? 0 }, id);
         es.close();
+        // 出炉仪式：小火车到站 → 「行程已就绪」盖章 → 展开成品
+        const reduce = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        if (reduce) {
+          setPhase("ready");
+        } else {
+          setCeremony(true);
+          window.setTimeout(() => setPhase("ready"), 2200);
+        }
       } else if (e.type === "error") {
         setError(e.message);
         setPhase("error");
@@ -254,7 +267,12 @@ export default function TripPage() {
 
         // 已完成 → 直接渲染存好的行程，不再重跑流水线（P1 幂等）
         if (data.status === "done" && Array.isArray(data.days)) {
-          setTitle(`${data.destination ?? ""} 行程`.trim());
+          // 优先用落库的成稿标题/概览（0008），缺失时回退「<目的地> 行程」
+          setTitle(
+            (typeof data.title === "string" && data.title) ||
+              `${data.destination ?? ""} 行程`.trim(),
+          );
+          if (typeof data.overview === "string") setOverview(data.overview);
           setDays(normalizeDays(data.days as ItineraryDay[]));
           setReferences((data.references as Reference[]) ?? []);
           setPhase("ready");
@@ -360,6 +378,26 @@ export default function TripPage() {
   // ── 列表 ↔ 地图双向联动 ──
   // hoverKey：悬停条目/针脚的 "dayIndex-itemIndex"
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  // 触屏定位：条目「地图」钮 → 滚到地图 + flyTo 针脚开弹窗（每次新对象，可重复触发）
+  const [spot, setSpot] = useState<{ key: string } | null>(null);
+  function locateOnMap(key: string) {
+    setSpot({ key });
+    setHoverKey(key);
+    document
+      .querySelector(".wl-maprail")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  // 针脚弹窗「在行程中查看」→ 滚回条目并短暂高亮
+  function locateInList(key: string) {
+    document
+      .getElementById(`item-${key}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHoverKey(key);
+    window.setTimeout(
+      () => setHoverKey((h) => (h === key ? null : h)),
+      1800,
+    );
+  }
   // 滚到第几天，地图聚焦第几天；滚出行程区（概览/预算…）回到全程。
   // 用「阅读线」观察器（视口 28%~42% 细带）直接观察逐日区块——
   // SectionNav 的 scrollspy 以「最靠上的可见章节」为准，超高的父容器会一直霸榜，测不出天。
@@ -605,6 +643,7 @@ export default function TripPage() {
           summaries={agentSummaries}
           loading={phase === "loading"}
           streamLost={streamLost}
+          finished={ceremony}
           onRetry={openPlanStream}
         />
       )}
@@ -743,6 +782,8 @@ export default function TripPage() {
                     hoverKey={hoverKey}
                     onHoverKey={setHoverKey}
                     syncDay={focusDay}
+                    spot={spot}
+                    onLocateItem={locateInList}
                   />
                 )}
               </div>
@@ -833,7 +874,7 @@ export default function TripPage() {
 
                       <ul className="mt-3 space-y-3">
                         {d.items.map((it, ii) => (
-                          <li key={ii} className="list-none">
+                          <li key={ii} id={`item-${di}-${ii}`} className="list-none">
                             <TravelLeg
                               from={ii > 0 ? itemCoords[`${di}-${ii - 1}`] : undefined}
                               to={itemCoords[`${di}-${ii}`]}
@@ -849,6 +890,11 @@ export default function TripPage() {
                               hovered={hoverKey === `${di}-${ii}`}
                               onHover={(h) =>
                                 setHoverKey(h ? `${di}-${ii}` : null)
+                              }
+                              onLocate={
+                                itemCoords[`${di}-${ii}`]
+                                  ? () => locateOnMap(`${di}-${ii}`)
+                                  : undefined
                               }
                               onDragStart={() =>
                                 (dragSrc.current = { type: "item", d: di, i: ii })
@@ -1342,13 +1388,13 @@ function ChatPanel({
               className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
             >
               <div
-                className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-1.5 text-sm ${
+                className={`max-w-[85%] rounded-xl px-3 py-1.5 text-sm ${
                   m.role === "user"
-                    ? "bg-teal text-white"
+                    ? "whitespace-pre-wrap bg-teal text-white"
                     : "border border-line bg-surface text-ink/80"
                 }`}
               >
-                {m.content}
+                {m.role === "user" ? m.content : <Markdown text={m.content} />}
               </div>
             </div>
           ))}
@@ -2350,6 +2396,7 @@ function ItemCard({
   provenance,
   hovered = false,
   onHover,
+  onLocate,
   onDragStart,
   onDrop,
   onChange,
@@ -2368,6 +2415,8 @@ function ItemCard({
   hovered?: boolean;
   /** 鼠标进出卡片时回传（页面据此放大地图对应针脚） */
   onHover?: (hovering: boolean) => void;
+  /** 触屏定位（仅小屏显示按钮）：滚到地图并聚焦本条目针脚；无坐标时不传 */
+  onLocate?: () => void;
   onDragStart: () => void;
   onDrop: () => void;
   onChange: (field: keyof ItineraryItem, value: string | number) => void;
@@ -2444,6 +2493,16 @@ function ItemCard({
         />
       </span>
       {provenance && <TrustBadge p={provenance} tripId={tripId} kind={item.kind} />}
+      {onLocate && (
+        <button
+          onClick={onLocate}
+          className="inline-flex items-center gap-0.5 text-teal-dark cursor-pointer lg:hidden"
+          title="在地图上查看"
+        >
+          <MapPin className="h-3.5 w-3.5" aria-hidden />
+          地图
+        </button>
+      )}
       {item.why && (
         <button
           onClick={() => {
@@ -2922,6 +2981,7 @@ function PlanningBoard({
   summaries,
   loading,
   streamLost,
+  finished = false,
   onRetry,
 }: {
   origin: string | null;
@@ -2930,9 +2990,13 @@ function PlanningBoard({
   summaries: Record<string, string>;
   loading: boolean;
   streamLost: boolean;
+  /** 出炉仪式：全员到站，盖「行程已就绪」章（随后由页面切换到成品） */
+  finished?: boolean;
   onRetry: () => void;
 }) {
-  const doneCount = AGENTS.filter((a) => statuses[a.key] === "done").length;
+  const doneCount = finished
+    ? AGENTS.length
+    : AGENTS.filter((a) => statuses[a.key] === "done").length;
   const pct = (doneCount / AGENTS.length) * 100;
 
   // 已用时计时器：等待有了刻度，焦虑就小了
@@ -3056,8 +3120,35 @@ function PlanningBoard({
         <p className="mt-6 text-sm text-muted">
           {loading
             ? "加载中…"
-            : "8 位专家实时联网协作中，约需 1~3 分钟——每位专家完成即亮出成果。"}
+            : finished
+              ? "行程出炉！正在为你展开…"
+              : "8 位专家实时联网协作中，约需 1~3 分钟——每位专家完成即亮出成果。"}
         </p>
+      )}
+
+      {/* ── 出炉仪式：印章「啪」地盖下 ── */}
+      {finished && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          className="fixed inset-0 z-[1200] grid place-items-center bg-canvas/55 backdrop-blur-[2px]"
+          aria-live="polite"
+        >
+          <motion.div
+            initial={{ scale: 2.6, opacity: 0, rotate: -18 }}
+            animate={{ scale: 1, opacity: 1, rotate: -4 }}
+            transition={{ type: "spring", stiffness: 240, damping: 15, delay: 0.15 }}
+            className="rounded-xl border-4 border-seal bg-surface/95 px-10 py-6 text-center shadow-lift"
+          >
+            <p className="font-serif text-3xl font-black tracking-[0.18em] text-seal">
+              行程已就绪
+            </p>
+            <p className="font-data mt-2 text-xs text-muted">
+              {AGENTS.length} 位专家 · 全部到站
+            </p>
+          </motion.div>
+        </motion.div>
       )}
     </div>
   );

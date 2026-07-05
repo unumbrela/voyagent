@@ -16,6 +16,7 @@
     "analyze:study": "tsx --env-file=.env.local scripts/analyze-study.ts"
   },
   "dependencies": {
+    "@amap/amap-jsapi-loader": "^1.0.1",
     "@anthropic-ai/sdk": "^0.106.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
@@ -25,9 +26,12 @@
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "wawa-lipsync": "^0.0.2"
   },
   "devDependencies": {
+    "@amap/amap-jsapi-types": "^0.0.15",
     "@tailwindcss/postcss": "^4",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",

@@ -179,7 +179,7 @@ export async function runPipeline({
 
   // 综合：hub_planner 是成品行程，validator 是质检报告
   const itinerary = upstream.hub_planner as
-    | { days?: unknown; references?: unknown }
+    | { days?: unknown; references?: unknown; title?: unknown; overview?: unknown }
     | undefined;
   await supabase.from("itineraries").upsert({
     trip_id: tripId,
@@ -188,6 +188,19 @@ export async function runPipeline({
     validation: upstream.validator ?? null,
     validated_at: new Date().toISOString(),
   });
+  // title/overview 落库（0008 迁移）；分开写：未应用迁移时报「未知列」，
+  // 静默降级——重开行程回退到「<目的地> 行程」，不影响主流程
+  const { error: metaErr } = await supabase
+    .from("itineraries")
+    .update({
+      title: typeof itinerary?.title === "string" ? itinerary.title : null,
+      overview:
+        typeof itinerary?.overview === "string" ? itinerary.overview : null,
+    })
+    .eq("trip_id", tripId);
+  if (metaErr) {
+    console.warn("[pipeline] title/overview 落库失败（未应用 0008 迁移？）", metaErr.message);
+  }
   await supabase.from("trips").update({ status: "done" }).eq("id", tripId);
 
   onEvent({ type: "done", itinerary: upstream.hub_planner });

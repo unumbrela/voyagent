@@ -16,10 +16,12 @@ import { useCopilot } from "./store";
 import { CardView } from "./cards";
 import { logEvent } from "@/lib/log";
 import { ProposalCard } from "@/app/ui/proposal";
+import { Markdown, stripMarkdown } from "@/app/ui/markdown";
 import {
   Compass,
   X,
   Mic,
+  Keyboard,
   Volume2,
   VolumeX,
   Send,
@@ -29,16 +31,21 @@ import {
   Sparkles,
 } from "@/app/ui/icons";
 import type { DigitalHumanHandle, Emotion } from "./DigitalHuman";
+import { AVATAR_MODE } from "./avatar-config";
 
-// 数字人依赖 Web Audio/口型分析，仅客户端加载；chunk 加载期间给出夜空占位
-const DigitalHuman = dynamic(() => import("./DigitalHuman"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(160deg,#1b2456,#0b1124)]">
-      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-[#2fd4c6]" />
-    </div>
-  ),
-});
+// 数字人依赖 Web Audio/口型分析，仅客户端加载；chunk 加载期间给出夜空占位。
+// 形象二选一：手绘 SVG 木偶（默认）或你自己的写实立绘（NEXT_PUBLIC_AVATAR_MODE=image）。
+const DigitalHuman = dynamic(
+  () => (AVATAR_MODE === "image" ? import("./DigitalHumanImage") : import("./DigitalHuman")),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(160deg,#1b2456,#0b1124)]">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-[#2fd4c6]" />
+      </div>
+    ),
+  },
+);
 import type {
   AgentEvent,
   AgentMsg,
@@ -96,9 +103,11 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
   const [busy, setBusy] = useState(false);
   // 「改动前先预览」偏好（RQ1 控制权变量）：开启后 AI 的每次改动都先给预览卡再由用户确认
   const [alwaysPreview, setAlwaysPreview] = useState(false);
-  // 数字人（3D 头像 + 语音 + 表情）开关与静音。默认开启：让小行以数字人形象出现。
+  // 数字人（头像 + 语音 + 表情）开关与静音。默认开启：让小行以数字人形象出现。
   const [avatarOn, setAvatarOn] = useState(true);
   const [avatarMuted, setAvatarMuted] = useState(false);
+  // 输入模式：语音优先（说完自动发送），可切键盘；浏览器不支持 Web Speech 时自动回落键盘
+  const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
   // 视图：对话 / 记忆管理（「小行记得你」——AI 记了什么，可见可控）
   const [view, setView] = useState<"chat" | "memory">("chat");
   // 数字人是否正在说话（面板舞台上显示声浪指示）
@@ -111,9 +120,12 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
   useEffect(() => {
     try {
       setAlwaysPreview(localStorage.getItem("hci_always_preview") === "1");
-      // 数字人默认开启：仅当用户显式关过（存 "0"）才关闭
-      setAvatarOn(localStorage.getItem("hci_digital_human") !== "0");
+      // 数字人默认开启：仅当显式选过「智能体图标」才用罗盘。
+      // 注意：键名从 hci_digital_human 换成 hci_avatar_style——旧键的历史 "0"
+      // 会让气泡常驻指南针（产品已改为数字人优先，旧值一律作废）。
+      setAvatarOn(localStorage.getItem("hci_avatar_style") !== "agent");
       setAvatarMuted(localStorage.getItem("hci_avatar_muted") === "1");
+      if (localStorage.getItem("hci_input_mode") === "text") setInputMode("text");
     } catch {
       /* 无存储：用默认值 */
     }
@@ -124,11 +136,30 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
     if (avatarOn) dhRef.current?.setEmotion(e);
   }
 
-  // 语音输入（多模态）：把识别文本追加到输入框，用户可再编辑后发送
+  // 语音输入（多模态）：语音模式下说完自动发送（对话感）；键盘模式下追加到输入框可再编辑
   const voice = useVoiceDictation((t) => {
-    setText((prev) => (prev ? prev.trimEnd() + " " : "") + t);
-    logEvent("voice_input", { len: t.length }, getController()?.getTripId() ?? null);
+    logEvent(
+      "voice_input",
+      { len: t.length, mode: inputMode },
+      getController()?.getTripId() ?? null,
+    );
+    if (inputMode === "voice") {
+      send(t, { voice: true });
+    } else {
+      setText((prev) => (prev ? prev.trimEnd() + " " : "") + t);
+    }
   });
+
+  /** 切换 语音/键盘 输入模式并持久化 */
+  function switchInputMode(m: "voice" | "text") {
+    setInputMode(m);
+    try {
+      localStorage.setItem("hci_input_mode", m);
+    } catch {
+      /* 忽略 */
+    }
+    logEvent("input_mode", { mode: m }, getController()?.getTripId() ?? null);
+  }
 
   function toggleAlwaysPreview() {
     setAlwaysPreview((v) => {
@@ -151,7 +182,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
     setAvatarOn((v) => {
       const next = !v;
       try {
-        localStorage.setItem("hci_digital_human", next ? "1" : "0");
+        localStorage.setItem("hci_avatar_style", next ? "human" : "agent");
       } catch {
         /* 忽略 */
       }
@@ -226,7 +257,8 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
       case "text":
         setItems((s) => [...s, { kind: "assistant", text: e.delta }]);
         if (avatarOn && e.delta.trim()) {
-          dhRef.current?.speak(e.delta);
+          // 朗读前剥掉 Markdown 记号，数字人不该念出「星号星号」
+          dhRef.current?.speak(stripMarkdown(e.delta));
           logEvent(
             "avatar_speak",
             { len: e.delta.length, muted: avatarMuted },
@@ -273,7 +305,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
     }
   }
 
-  async function send(preset?: string) {
+  async function send(preset?: string, opts?: { voice?: boolean }) {
     const content = (preset ?? text).trim();
     if (!content || busy) return;
     const history: AgentMsg[] = items
@@ -289,7 +321,12 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
     setEmotion("thinking");
     logEvent(
       "chat_send",
-      { via: "copilot", len: content.length, preset: preset != null },
+      {
+        via: "copilot",
+        len: content.length,
+        preset: preset != null && !opts?.voice,
+        voice: !!opts?.voice,
+      },
       getController()?.getTripId() ?? null,
     );
     try {
@@ -609,8 +646,8 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                 if (it.kind === "assistant")
                   return (
                     <div key={i} className="flex justify-start">
-                      <div className="max-w-[85%] whitespace-pre-wrap rounded-xl border border-line bg-surface px-3 py-1.5 text-sm text-ink/80">
-                        {it.text}
+                      <div className="max-w-[85%] rounded-xl border border-line bg-surface px-3 py-1.5 text-sm text-ink/80">
+                        <Markdown text={it.text} />
                       </div>
                     </div>
                   );
@@ -685,7 +722,45 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                     去登录
                   </a>
                 </p>
+              ) : voice.supported && inputMode === "voice" ? (
+                // 语音模式（默认）：点击说话，说完自动发送；可切键盘
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => switchInputMode("text")}
+                    title="切换为键盘输入"
+                    aria-label="切换为键盘输入"
+                    className="rounded-xl border border-line p-2.5 text-muted transition hover:border-teal hover:text-teal-dark cursor-pointer"
+                  >
+                    <Keyboard className="h-4 w-4" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={voice.toggle}
+                    disabled={busy}
+                    aria-pressed={voice.listening}
+                    aria-label={voice.listening ? "停止聆听" : "开始说话"}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium transition disabled:opacity-50 cursor-pointer ${
+                      voice.listening
+                        ? "bg-seal-tint text-seal ring-2 ring-seal/30"
+                        : "bg-teal text-white hover:bg-teal-dark"
+                    }`}
+                  >
+                    <Mic
+                      className={`h-4 w-4 shrink-0 ${voice.listening ? "animate-pulse" : ""}`}
+                      aria-hidden
+                    />
+                    <span className="truncate">
+                      {voice.listening
+                        ? "正在聆听…说完自动发送"
+                        : busy
+                          ? "小行思考中…"
+                          : "点击说话"}
+                    </span>
+                  </button>
+                </div>
               ) : (
+                // 键盘模式（或浏览器不支持语音识别时的回落）
                 <div className="flex items-end gap-2">
                   <textarea
                     value={text}
@@ -701,16 +776,10 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                   {voice.supported && (
                     <button
                       type="button"
-                      onClick={voice.toggle}
-                      disabled={busy}
-                      aria-label={voice.listening ? "停止语音输入" : "开始语音输入"}
-                      aria-pressed={voice.listening}
-                      title={voice.listening ? "正在聆听…点击停止" : "语音输入"}
-                      className={`rounded-lg border px-2.5 py-2 transition disabled:opacity-50 cursor-pointer ${
-                        voice.listening
-                          ? "animate-pulse border-seal/50 bg-seal-tint text-seal"
-                          : "border-line text-muted hover:border-teal hover:text-teal-dark"
-                      }`}
+                      onClick={() => switchInputMode("voice")}
+                      title="切换为语音输入"
+                      aria-label="切换为语音输入"
+                      className="rounded-lg border border-line px-2.5 py-2 text-muted transition hover:border-teal hover:text-teal-dark cursor-pointer"
                     >
                       <Mic className="h-4 w-4" aria-hidden />
                     </button>
@@ -870,6 +939,11 @@ function useVoiceDictation(onText: (t: string) => void) {
   const [supported] = useState(() => getSpeechCtor() !== null);
   const [listening, setListening] = useState(false);
   const recRef = useRef<SpeechRec | null>(null);
+  // 识别是异步返回的：经 ref 转发到「最新一次渲染」的回调，避免读到过期的模式/对话状态
+  const onTextRef = useRef(onText);
+  useEffect(() => {
+    onTextRef.current = onText;
+  });
 
   function toggle() {
     if (listening) {
@@ -885,7 +959,7 @@ function useVoiceDictation(onText: (t: string) => void) {
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
       const t = e.results?.[0]?.[0]?.transcript ?? "";
-      if (t) onText(t);
+      if (t) onTextRef.current(t);
     };
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);

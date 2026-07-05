@@ -24,7 +24,8 @@ export async function GET(
       .single(),
     supabase
       .from("itineraries")
-      .select("days, references_data, chat")
+      // select * 而非点名列：title/overview 属 0008 迁移，未应用时点名会整条报错
+      .select("*")
       .eq("trip_id", id)
       .maybeSingle(),
   ]);
@@ -33,6 +34,7 @@ export async function GET(
     return NextResponse.json({ error: "trip 不存在" }, { status: 404 });
   }
   const constraints = (ctx?.constraints ?? {}) as Record<string, unknown>;
+  const itinRow = (itin ?? {}) as Record<string, unknown>;
   return NextResponse.json({
     status: trip.status,
     share_token: trip.share_token ?? null,
@@ -42,9 +44,11 @@ export async function GET(
     end_date: ctx?.end_date ?? null,
     budget: ctx?.budget ?? null,
     party_size: ctx?.party_size ?? null,
-    days: itin?.days ?? null,
-    references: itin?.references_data ?? null,
-    chat: itin?.chat ?? null,
+    title: typeof itinRow.title === "string" ? itinRow.title : null,
+    overview: typeof itinRow.overview === "string" ? itinRow.overview : null,
+    days: itinRow.days ?? null,
+    references: itinRow.references_data ?? null,
+    chat: itinRow.chat ?? null,
   });
 }
 

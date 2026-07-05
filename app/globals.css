@@ -444,6 +444,112 @@ body::before {
   animation: dh-eq 0.9s ease-in-out infinite;
 }
 
+/* ── 聊天气泡内的 Markdown 排版（紧凑版，配 app/ui/markdown.tsx） ── */
+.chat-md {
+  line-height: 1.6;
+  word-break: break-word;
+}
+.chat-md > :first-child {
+  margin-top: 0;
+}
+.chat-md > :last-child {
+  margin-bottom: 0;
+}
+.chat-md p {
+  margin: 0.35rem 0;
+}
+.chat-md ul,
+.chat-md ol {
+  margin: 0.35rem 0;
+  padding-left: 1.15rem;
+}
+.chat-md ul {
+  list-style: disc;
+}
+.chat-md ol {
+  list-style: decimal;
+}
+.chat-md li {
+  margin: 0.15rem 0;
+}
+.chat-md li::marker {
+  color: var(--teal);
+}
+.chat-md strong {
+  font-weight: 650;
+  color: var(--ink);
+}
+.chat-md h1,
+.chat-md h2,
+.chat-md h3,
+.chat-md h4 {
+  margin: 0.6rem 0 0.25rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+}
+.chat-md h1 {
+  font-size: 1rem;
+}
+.chat-md h2 {
+  font-size: 0.95rem;
+}
+.chat-md h3,
+.chat-md h4 {
+  font-size: 0.875rem;
+}
+.chat-md code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.8125em;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+.chat-md pre {
+  margin: 0.4rem 0;
+  padding: 0.6rem 0.7rem;
+  overflow-x: auto;
+  background: var(--night-1);
+  color: var(--night-ink);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+.chat-md pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+.chat-md blockquote {
+  margin: 0.4rem 0;
+  padding: 0.1rem 0 0.1rem 0.7rem;
+  border-left: 3px solid var(--teal);
+  color: var(--muted);
+}
+.chat-md hr {
+  margin: 0.6rem 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.chat-md table {
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.chat-md th,
+.chat-md td {
+  border: 1px solid var(--line-strong);
+  padding: 0.25rem 0.55rem;
+  text-align: left;
+}
+.chat-md th {
+  background: var(--surface-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* 暮色段 → 浅色正文的弧形过渡 */
 .night-curve {
   position: absolute;
@@ -539,6 +645,68 @@ body::before {
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.22);
 }
 
+/* ── 落地页实景演示：左侧行程时间轴（showcase 专属，勿与 /trips 的 wl-* 混用） ── */
+/* 时间轴节点：按天配色圆盘 + 白色类别图标，与右侧地图针脚同形，一眼可对应 */
+.sc-node {
+  --c: var(--teal);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 5px rgba(16, 24, 40, 0.24);
+}
+.sc-node svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.1;
+}
+/* 地点卡：细描边 + 左侧类别色脊 + 悬浮抬升 */
+.sc-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.sc-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--kc, var(--line-strong));
+  opacity: 0.9;
+}
+.sc-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-lift);
+}
+/* 类别小徽标：类别色描边 + 极浅同色底 + 图标 + 中文短标 */
+.sc-kind-chip {
+  --kc: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--kc) 78%, #1b2230);
+  background: color-mix(in srgb, var(--kc) 12%, #fff);
+  border: 1px solid color-mix(in srgb, var(--kc) 26%, transparent);
+}
+
 /* 缩略图占位块：类别色柔和底 + emoji（无真实照片源时用） */
 .wl-thumb {
   --c: var(--teal);
@@ -608,6 +776,12 @@ body::before {
   font-size: 0.8125rem;
 }
 
+/* 落地页演示地图：高德中文底图偏艳（橙黄主干道跳），仅对瓦片图层降饱和 + 提亮，
+   收敛到暖纸调，且不影响上层针脚/路线的鲜明度（.sc-tiles 挂在瓦片图层容器上） */
+.sc-tiles {
+  filter: saturate(0.72) brightness(1.05) contrast(0.95);
+}
+
 /* ── 行程地图：自定义水滴标记 ── */
 .tp-pin {
   transition: transform 0.15s ease, filter 0.15s ease;
@@ -632,6 +806,16 @@ body::before {
   line-height: 1;
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+/* 针脚内的类别图标（替代数字）：白色描边，随内环反旋保持正立 */
+.tp-pin-inner span.tp-ico {
+  display: grid;
+  place-items: center;
+}
+.tp-pin-inner span.tp-ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
 .tp-pin:hover {
   transform: scale(1.18);
   z-index: 600;
@@ -650,6 +834,60 @@ body::before {
   to {
     stroke-dashoffset: -11;
   }
+}
+
+/* ── 演示地图：针脚常驻名称标签（高德 3D DOM 覆盖物 .amp / Leaflet divIcon .sc-lfmarker 通用） ── */
+/* 仅 34×34 的针脚参与锚点，标签绝对定位溢出到右侧，不改变锚点盒 */
+.amp {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+.amp .tp-pin,
+.sc-lfmarker .tp-pin {
+  width: 34px;
+  height: 34px;
+}
+.amp-label,
+.sc-lflabel {
+  position: absolute;
+  left: calc(100% - 4px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 2px 7px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.amp-label i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c);
+}
+/* hover：针脚放大 + 标签点亮并置顶 */
+.amp.amp-hot,
+.leaflet-marker-icon.sc-lfmarker-hot {
+  z-index: 10000 !important;
+}
+.amp.amp-hot .tp-pin,
+.sc-lfmarker-hot .tp-pin {
+  transform: scale(1.18);
+}
+.amp.amp-hot .amp-label,
+.sc-lfmarker-hot .sc-lflabel {
+  border-color: var(--c);
+  box-shadow: var(--shadow-lift);
 }
 
 /* 落地页演示地图：针脚掉落进场 / 列表联动高亮 / 悬浮提示 */
@@ -719,6 +957,22 @@ body::before {
   background: #ecfdf5;
   padding: 1px 7px;
   border-radius: 999px;
+}
+/* 弹窗底部「在行程中查看」：针脚 → 列表的反向联动入口（触屏无 hover 时的主通道） */
+.tp-pop-go {
+  display: block;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tp-pop-go:hover {
+  background: color-mix(in srgb, var(--teal) 20%, #fff);
 }
 .leaflet-container {
   font: inherit;
