@@ -65,7 +65,7 @@ export function XhsGuidePanel({
           await run(""); // 无缓存 → 自动生成
         }
       } catch {
-        setErr("加载攻略失败，可点「重翻一次」重试。");
+        setErr("加载失败，可以点「重翻」再试一次。");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,12 +118,12 @@ export function XhsGuidePanel({
     <Panel
       className="no-print mt-6"
       icon={Lightbulb}
-      title="灵感 · 网友攻略"
+      title="网友攻略"
       meta={
         <span className="text-xs font-normal text-muted">
           {guide
-            ? `${guide.spots.length} 玩法 · ${guide.eats.length} 美食`
-            : `聚合小红书等社区，帮你摸清${destination ?? "目的地"}怎么玩`}
+            ? `${guide.spots.length} 个玩法 · ${guide.eats.length} 个美食`
+            : `汇总小红书等网友的攻略，帮你了解${destination ?? "目的地"}怎么玩`}
         </span>
       }
       open={open}
@@ -158,7 +158,7 @@ export function XhsGuidePanel({
       {loading && (
         <div className="flex items-center gap-2 py-6 text-sm text-muted">
           <span className="h-2 w-2 animate-pulse rounded-full bg-teal" />
-          正在翻{destination ?? "目的地"}的网友攻略、交叉多篇提炼中…
+          正在看{destination ?? "目的地"}的网友攻略，综合多篇整理中…
         </div>
       )}
 
@@ -205,7 +205,7 @@ export function XhsGuidePanel({
           )}
 
           {guide.spots.length > 0 && (
-            <SpotGrid title="玩法 · 景点" items={guide.spots} kind="activity" onAdd={addSpot} />
+            <SpotGrid title="景点玩法" items={guide.spots} kind="activity" onAdd={addSpot} />
           )}
           {guide.eats.length > 0 && (
             <SpotGrid title="美食" items={guide.eats} kind="food" onAdd={addSpot} />
@@ -241,7 +241,7 @@ export function XhsGuidePanel({
             <div className="border-t border-line pt-2.5">
               <div className="mb-1.5 text-[11px] text-muted/80">
                 参考 {guide.sources.length} 篇网友攻略
-                {xhsN > 0 ? `（含 ${xhsN} 篇小红书 📕）` : "（本次小红书原帖召回较少，已用其他网友攻略补充）"}
+                {xhsN > 0 ? `（含 ${xhsN} 篇小红书 📕）` : "（这次小红书原帖较少，用其他网友攻略补充了）"}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {guide.sources.map((s, i) => (

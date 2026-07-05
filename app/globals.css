@@ -443,6 +443,24 @@ body::before {
   transform-origin: bottom;
   animation: dh-eq 0.9s ease-in-out infinite;
 }
+/* 气泡静帧头像的轻微呼吸（3D 数字人的 bubble 变体用） */
+@keyframes dh-breathe {
+  0%,
+  100% {
+    transform: scale(1.02) translateY(0);
+  }
+  50% {
+    transform: scale(1.045) translateY(-1px);
+  }
+}
+.dh-breathe {
+  animation: dh-breathe 5.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dh-breathe {
+    animation: none;
+  }
+}
 
 /* ── 聊天气泡内的 Markdown 排版（紧凑版，配 app/ui/markdown.tsx） ── */
 .chat-md {
@@ -776,12 +794,11 @@ body::before {
   font-size: 0.8125rem;
 }
 
-/* 落地页演示地图：高德中文底图偏艳（橙黄主干道跳），仅对瓦片图层降饱和收敛到暖纸调，
-   且不影响上层针脚/路线的鲜明度（.sc-tiles 挂在瓦片图层容器上）。
-   注意：底图现为带中文注记版（scl=1），故不再 brightness 提亮 / contrast 压低——
-   否则会把区县/街道名的深灰文字洗淡到看不清。 */
+/* 演示/行程地图（Leaflet 高德栅格）：高德中文底图偏艳（橙黄主干道跳），只对瓦片层
+   轻降饱和收敛到暖纸调，保留原本的地图配色观感（别再重压成灰——之前 saturate .32
+   把地图洗成灰调反而丑）。注记密度靠「缩放级」控制（低一级只留主干道/大地名），不在此处理。 */
 .sc-tiles {
-  filter: saturate(0.82);
+  filter: saturate(0.85);
 }
 
 /* ── 行程地图：自定义水滴标记 ── */
@@ -846,7 +863,8 @@ body::before {
   height: 34px;
 }
 .amp .tp-pin,
-.sc-lfmarker .tp-pin {
+.sc-lfmarker .tp-pin,
+.hero-lfmarker .tp-pin {
   width: 34px;
   height: 34px;
 }
@@ -888,6 +906,43 @@ body::before {
 }
 .amp.amp-hot .amp-label,
 .sc-lfmarker-hot .sc-lflabel {
+  border-color: var(--c);
+  box-shadow: var(--shadow-lift);
+}
+
+/* ── Hero 真地图（HeroTripMap）：编号针脚 + 悬停浮现名称标签 ── */
+/* 名称标签默认隐藏，仅列表/针脚 hover 时从针脚右侧滑出，保持小地图清爽 */
+.hero-lflabel {
+  position: absolute;
+  left: calc(100% - 2px);
+  top: 50%;
+  transform: translateY(-50%) scale(0.9);
+  transform-origin: left center;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  opacity: 0;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  pointer-events: none;
+}
+.leaflet-marker-icon.hero-lfmarker-hot {
+  z-index: 10000 !important;
+}
+.hero-lfmarker-hot .tp-pin {
+  transform: scale(1.18);
+}
+.hero-lfmarker-hot .hero-lflabel {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
   border-color: var(--c);
   box-shadow: var(--shadow-lift);
 }

@@ -49,10 +49,10 @@ export function ProposalCard({
                 第 {d.day} 天
               </span>
               {d.status === "added" && (
-                <span className="text-teal-dark">（新增当天）</span>
+                <span className="text-teal-dark">（新增这天）</span>
               )}
               {d.status === "removed" && (
-                <span className="text-seal">（删除当天）</span>
+                <span className="text-seal">（删除这天）</span>
               )}
               {d.added.map((t) => (
                 <span key={`a-${t}`} className="ml-1 text-teal-dark">

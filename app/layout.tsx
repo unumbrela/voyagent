@@ -49,9 +49,9 @@ const notoSerif = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "漫游 · 一个应用搞定整趟旅行规划",
+  title: "漫游 · 一个应用安排好整趟旅行",
   description:
-    "逐日行程、真实地点、交通住宿预算与同步地图，一屏尽览——8 位 AI 专家实时联网协作。",
+    "帮你排好每天的行程，查真实的车票、酒店和门票，都标在地图上。8 个 AI 一起规划。",
 };
 
 export default async function RootLayout({

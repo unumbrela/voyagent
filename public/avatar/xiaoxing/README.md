@@ -1,8 +1,24 @@
 # 数字人「小行」立绘规范
 
-> **当前默认是「视频版」数字人（最像真人：真眨眼/呼吸/说话）。**
-> 要做视频循环片段，看 [`video-prompts.md`](./video-prompts.md)。
-> 本文档讲的是**静态立绘**（用于 image 模式、以及视频的 poster/兜底）。
+> **当前默认是「实时 3D 版」数字人（`AVATAR_MODE=three`，最自然：说话时头/眼/呼吸不冻结、嘴逐字连续变形）。**
+> 面板左上角可切换 **3 个模型**（在 `app/copilot/avatar-config.ts` 的 `AVATAR_3D_MODELS` 注册）：
+>
+> | id | 名称 | 性别 | 文件 | 口型 | 许可 |
+> | --- | --- | --- | --- | --- | --- |
+> | `mpfb`（默认） | 远舟 | 男 | `human.glb` | jaw 合成 | CC0 |
+> | `rpm` | 林夏 | 女 | `rpm.glb` | 真 viseme | CC BY-NC 4.0（署名） |
+> | `vroid` | 小樱 | 女（二次元） | `vroid.glb` | 真 viseme | CC BY-NC 4.0（署名） |
+>
+> 三者都来自 [met4citizen/TalkingHead](https://github.com/met4citizen/TalkingHead) 的 avatars，带 ARKit + Oculus viseme morph，
+> 骨骼名统一（Head/Neck/Spine2/LeftEye/RightEye）。原始 GLB 用
+> `npx @gltf-transform/cli optimize --compress meshopt --simplify false --join false --texture-compress webp --texture-size 1024`
+> 压缩后放这里；`rpm.png` / `vroid.png` / `head.png` 是各自 64px 气泡用的静帧头像。渲染逻辑见 `app/copilot/DigitalHuman3D.tsx`。
+>
+> **再加一个 3D 模型**：找带 ARKit+Oculus viseme 的 GLB → 同命令压缩 → 放本目录 → 在 `AVATAR_3D_MODELS` 加一条
+> （配好 `frame`{dist/aimDrop/camRise}、`mouth`(viseme/synth)、T-pose 模型加 `armZ`、CC BY-NC 模型加 `credit`）→ 生成 poster。
+>
+> 下面这些 jpg/mp4 是**旧的 video / image / svg 回退模式**用的（`NEXT_PUBLIC_AVATAR_MODE=video/image/svg` 才启用）。
+> 视频循环片段看 [`video-prompts.md`](./video-prompts.md)；本文档讲的是**静态立绘**。
 
 把你生成的立绘按下面的**文件名**放进本目录，然后启用图片形象：
 

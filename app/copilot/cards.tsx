@@ -35,7 +35,7 @@ export function CardView({
         </div>
         {items.length === 0 && (
           <div className="text-xs text-muted/70">
-            未搜到（可能未配置搜索或无直达）
+            没查到（可能没有直达，或没配置搜索）
           </div>
         )}
         <ul className="max-h-56 space-y-1 overflow-y-auto pr-1">
@@ -78,7 +78,7 @@ export function CardView({
       <div className="rounded-lg border border-line bg-surface p-2">
         <div className="mb-1 text-[11px] text-muted">{card.dest} 天气</div>
         {days.length === 0 ? (
-          <div className="text-xs text-muted/70">该日期无预报（超 16 天）</div>
+          <div className="text-xs text-muted/70">这个日期还没有天气预报（超过 16 天）</div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {days.map(([d, w]) => {
@@ -137,7 +137,7 @@ export function CardView({
         {g.spots.length > 0 && (
           <div className="mb-2">
             <div className="mb-1 text-[11px] font-medium text-muted">
-              玩法 · 景点（点按加入行程）
+              景点玩法（点一下加入行程）
             </div>
             <XhsSpotList items={g.spots} kind="activity" onAddItem={onAddItem} />
           </div>
@@ -146,7 +146,7 @@ export function CardView({
         {g.eats.length > 0 && (
           <div className="mb-2">
             <div className="mb-1 text-[11px] font-medium text-muted">
-              美食（点按加入行程）
+              美食（点一下加入行程）
             </div>
             <XhsSpotList items={g.eats} kind="food" onAddItem={onAddItem} />
           </div>
@@ -205,7 +205,7 @@ export function CardView({
   return (
     <div className="rounded-lg border border-line bg-surface p-2">
       <div className="mb-1 text-[11px] text-muted">
-        候选 {card.items.length} 个
+        备选 {card.items.length} 个
       </div>
       <div className="grid max-h-56 grid-cols-1 gap-1 overflow-y-auto pr-1">
         {card.items.map((c) => (

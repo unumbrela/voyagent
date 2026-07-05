@@ -199,7 +199,7 @@ export default function TripMap({
           originPoint: Pt | null;
           points: Record<string, Pt | null>;
         };
-        if (!res.ok) throw new Error((data as unknown as { error?: string }).error || "地点解析失败");
+        if (!res.ok) throw new Error((data as unknown as { error?: string }).error || "地点定位失败");
         if (!alive) return;
 
         const list: Resolved[] = [];
@@ -611,7 +611,7 @@ export default function TripMap({
           <button
             onClick={() => setShowSpots((v) => !v)}
             aria-pressed={showSpots}
-            title="来自「灵感·网友攻略」的推荐点（虚线圈标识未加入）"
+            title="来自「网友攻略」的推荐点（虚线圈表示还没加入）"
             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
               showSpots
                 ? "border-teal bg-teal-tint text-teal-dark"

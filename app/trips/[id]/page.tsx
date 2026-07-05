@@ -90,14 +90,14 @@ type Status = "pending" | "running" | "done" | "error";
 type Phase = "loading" | "planning" | "ready" | "error";
 
 const AGENTS: { key: string; label: string; wave: number; search?: boolean }[] = [
-  { key: "enrichment", label: "目的地调研", wave: 1 },
-  { key: "activities", label: "活动推荐", wave: 1, search: true },
-  { key: "food", label: "餐饮指南", wave: 1 },
-  { key: "accommodation", label: "住宿推荐", wave: 2, search: true },
-  { key: "scheduling", label: "日程编排", wave: 3 },
-  { key: "transport", label: "交通物流", wave: 4, search: true },
-  { key: "hub_planner", label: "综合行程", wave: 5 },
-  { key: "validator", label: "出行质检", wave: 6 },
+  { key: "enrichment", label: "了解目的地", wave: 1 },
+  { key: "activities", label: "推荐活动", wave: 1, search: true },
+  { key: "food", label: "推荐美食", wave: 1 },
+  { key: "accommodation", label: "推荐住宿", wave: 2, search: true },
+  { key: "scheduling", label: "安排日程", wave: 3 },
+  { key: "transport", label: "安排交通", wave: 4, search: true },
+  { key: "hub_planner", label: "汇总行程", wave: 5 },
+  { key: "validator", label: "检查行程", wave: 6 },
 ];
 
 const KINDS = ["activity", "food", "rest", "transit"];
@@ -786,10 +786,10 @@ export default function TripPage() {
                     })),
                   },
                   { id: "budget", label: "预算成本", icon: Wallet },
-                  { id: "inspiration", label: "灵感攻略", icon: Lightbulb },
-                  { id: "explore", label: "探索备选", icon: Compass },
+                  { id: "inspiration", label: "网友攻略", icon: Lightbulb },
+                  { id: "explore", label: "更多备选", icon: Compass },
                   { id: "packing", label: "打包清单", icon: Luggage },
-                  { id: "tune", label: "偏好调节", icon: SlidersHorizontal },
+                  { id: "tune", label: "调整偏好", icon: SlidersHorizontal },
                   { id: "process", label: "规划过程", icon: Microscope },
                   { id: "assistant", label: "对话助手", icon: MessageCircle },
                   ...(references.length
@@ -843,11 +843,11 @@ export default function TripPage() {
                 )}
                 <Countdown start={meta.start_date} end={meta.end_date} />
                 <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
-                  <span>条目可信度：</span>
+                  <span>每条信息的可靠程度：</span>
                   <SealStamp>已核实</SealStamp>
                   <Chip tone="teal">可查证</Chip>
                   <Chip tone="amber">待核实</Chip>
-                  <span>（点「已核实」印章可打开来源核对）</span>
+                  <span>（点「已核实」可以打开来源核对）</span>
                 </div>
               </section>
 
@@ -858,7 +858,7 @@ export default function TripPage() {
                     行程安排
                   </h2>
                   <span className="text-xs text-muted">
-                    可拖拽排序、直接编辑；交通条目可搜真实车次/航班
+                    可以拖动排序、直接改；交通那一项能搜真实车票和航班
                   </span>
                 </div>
                 <TimelineRail>
@@ -1033,7 +1033,7 @@ export default function TripPage() {
                       setDays(nd);
                       if (r) setReferences(r);
                       setDirty(false);
-                      setSaveMsg("已按偏好重排 ✓");
+                      setSaveMsg("已按偏好重新安排 ✓");
                       logEvent("diff_apply", { via: "pref", days: nd.length }, id);
                       try {
                         await fetch(`/api/trips/${id}`, {
@@ -1151,7 +1151,7 @@ function RegenDayButton({
         onClose={() => setConfirming(false)}
         onConfirm={regen}
         title={`重新生成第 ${day} 天？`}
-        body="将替换该天全部条目（其余天不动），真实车次/航班/酒店会保留。"
+        body="会把这一天的安排全部换掉（其他天不动），真实的车票、航班和酒店会保留。"
         confirmText="重新生成"
       />
     </>
@@ -1188,7 +1188,7 @@ function CandidatePool({
       try {
         const res = await fetch(`/api/trips/${id}/candidates`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "加载候选失败");
+        if (!res.ok) throw new Error(data.error || "加载失败");
         setItems((data.candidates as Candidate[]) ?? []);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -1228,10 +1228,10 @@ function CandidatePool({
     <Panel
       className="no-print mt-6"
       icon={Compass}
-      title="候选探索池"
+      title="更多备选"
       meta={
         <span className="text-xs font-normal text-muted">
-          各 agent 备选的真实景点/餐厅/酒店/车次 · 拖入或加入某天
+          没选进行程的真实景点、餐厅、酒店和车次，可拖进或加到某一天
         </span>
       }
       open={open}
@@ -1241,14 +1241,14 @@ function CandidatePool({
       {err && <p className="text-sm text-seal">{err}</p>}
       {items && items.length === 0 && (
         <p className="text-sm text-muted">
-          暂无候选（该行程的 agent 产物为空或尚未生成）。
+          暂时没有备选（这趟行程还没生成，或没有多余的备选）。
         </p>
       )}
 
       {groups.length > 0 && (
         <>
           <div className="mb-3 flex items-center gap-2 text-xs text-muted">
-            <span>「+加入」目标：</span>
+            <span>加到哪天：</span>
             <select
               value={targetDay}
               onChange={(e) => setTargetDay(Number(e.target.value))}
@@ -1336,7 +1336,7 @@ function CandidatePool({
             ))}
           </div>
           <p className="mt-3 text-[11px] text-muted/80">
-            提示：把卡片拖到某天的条目上/末尾放置区即可插入；或用「+加入」追加到上方所选天。
+            提示：把卡片拖到某天的条目上，或用「+加入」加到上面选好的那天。
           </p>
         </>
       )}
@@ -1419,7 +1419,7 @@ function ChatPanel({
     setProposal(null);
     setMessages((m) => [
       ...m,
-      { role: "assistant", content: "✅ 已把改动应用到行程，记得点右上角「保存」入库。" },
+      { role: "assistant", content: "✅ 改动已经应用到行程了，记得点右上角「保存」。" },
     ]);
   }
 
@@ -1430,7 +1430,7 @@ function ChatPanel({
         对话式助手
       </h4>
       <p className="mt-0.5 text-xs text-muted">
-        随便问，或让我改行程。例如「第2天节奏放慢、加个博物馆」「本地美食再多点」「机场怎么去市区」。改动会先给你预览、确认后再应用。
+        随便问，也可以让我改行程。比如「第 2 天排松一点，加个博物馆」「本地美食再多点」「机场怎么去市区」。改动会先给你看一遍，确认后才生效。
       </p>
 
       {messages.length > 0 && (
@@ -1460,7 +1460,7 @@ function ChatPanel({
       {/* 本轮参考的长期偏好（透明性） */}
       {usedMemories.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-          <span>参考了你的偏好：</span>
+          <span>用到了你的偏好：</span>
           {usedMemories.slice(0, 3).map((t, i) => (
             <span key={i} className="rounded-full bg-teal-tint px-2 py-0.5 text-teal-dark">
               {t.length > 18 ? t.slice(0, 18) + "…" : t}
@@ -1584,11 +1584,11 @@ function PreferencePanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "重排失败");
       const nd = (data.days as ItineraryDay[]) ?? [];
-      if (!nd.length) throw new Error("重排结果为空");
+      if (!nd.length) throw new Error("重新安排的结果是空的");
       setProposal({
         days: nd,
         references: data.references as Reference[] | undefined,
-        summary: "按偏好重排后的整体行程",
+        summary: "按你的偏好重新安排的行程",
       });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -1616,10 +1616,10 @@ function PreferencePanel({
     <Panel
       className="no-print mt-6"
       icon={SlidersHorizontal}
-      title="偏好调节"
+      title="调整偏好"
       meta={
         <span className="text-xs font-normal text-muted">
-          拖动节奏/预算、勾选兴趣 → 一键重排整段行程（先预览、确认后生效）
+          拖动节奏和预算、选好兴趣，一键重新安排整段行程（先给你看，确认后生效）
         </span>
       }
       open={open}
@@ -1648,7 +1648,7 @@ function PreferencePanel({
 
       <div className="mt-4">
         <div className="mb-1.5 text-xs font-medium text-muted">
-          兴趣侧重（可多选）
+          感兴趣的（可多选）
         </div>
         <div className="flex flex-wrap gap-1.5">
           {INTEREST_TAGS.map((t) => {
@@ -1676,10 +1676,10 @@ function PreferencePanel({
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={reorder} disabled={busy} loading={busy} size="sm">
           <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          {busy ? "重排中…（约 20~40 秒）" : "按偏好重排"}
+          {busy ? "重新安排中…（约 20~40 秒）" : "按偏好重新安排"}
         </Button>
         <span className="text-[11px] text-muted/80">
-          重排会保留日期与真实车票/航班/酒店，只调活动与节奏。
+          重新安排会保留日期和真实的车票、航班、酒店，只调整活动和节奏。
         </span>
       </div>
       {err && <p className="mt-2 text-xs text-seal">{err}</p>}
@@ -1764,7 +1764,7 @@ function ProcessTrace({ id }: { id: string }) {
       try {
         const res = await fetch(`/api/trips/${id}/trace`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "加载过程失败");
+        if (!res.ok) throw new Error(data.error || "加载失败");
         setTrace((data.trace as AgentTrace[]) ?? []);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -1805,7 +1805,7 @@ function ProcessTrace({ id }: { id: string }) {
       title="规划过程 · AI 是怎么想的"
       meta={
         <span className="text-xs font-normal text-muted">
-          8 个专家 agent 各做了什么、选了谁、取证来源
+          8 个 AI 各做了什么、选了什么、用了哪些来源
         </span>
       }
       open={open}
@@ -1862,10 +1862,10 @@ function ProcessTrace({ id }: { id: string }) {
                 >
                   <Dot status={t.status} />
                   <span className="text-sm font-medium text-ink">{t.label}</span>
-                  <Chip tone="muted">第 {t.wave} 波</Chip>
-                  {t.searched && <Chip tone="teal">联网取证 {t.sources.length}</Chip>}
+                  <Chip tone="muted">第 {t.wave} 轮</Chip>
+                  {t.searched && <Chip tone="teal">查了 {t.sources.length} 个来源</Chip>}
                   {t.candidateCount > 0 && (
-                    <Chip tone="amber">{t.candidateCount} 候选</Chip>
+                    <Chip tone="amber">{t.candidateCount} 个备选</Chip>
                   )}
                   <motion.span
                     animate={{ rotate: isOpen ? 180 : 0 }}
@@ -1891,8 +1891,8 @@ function ProcessTrace({ id }: { id: string }) {
                         {t.status !== "done" ? (
                           <p className="mt-1.5 text-muted/80">
                             {t.status === "error"
-                              ? `该步出错：${t.error ?? "未知错误"}`
-                              : "该步尚无产物。"}
+                              ? `这一步出错了：${t.error ?? "未知错误"}`
+                              : "这一步还没有结果。"}
                           </p>
                         ) : (
                           <>
@@ -1944,7 +1944,7 @@ function ProcessTrace({ id }: { id: string }) {
         </ol>
       )}
       <p className="mt-3 text-[11px] text-muted/80">
-        这些都是各 agent 真实产物的归纳：青色徽章表示带可核实来源，琥珀色表示还有未选入的候选（见候选池）。
+        这些都是每个 AI 真实做出来的结果：绿色标签表示有可核实的来源，橙色表示还有没选进来的备选（在「更多备选」里）。
       </p>
     </Panel>
   );
@@ -2134,7 +2134,7 @@ function PackingList({
               已勾选 {checkedCount}/{items.length}
             </span>
           ) : (
-            `按${destination ?? "目的地"}天气与活动智能生成`
+            `根据${destination ?? "目的地"}的天气和安排自动生成`
           )}
         </span>
       }
@@ -2192,7 +2192,7 @@ function PackingList({
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder="添加自定义物品…"
+              placeholder="自己添加物品…"
               className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20"
             />
             <Button
@@ -2207,7 +2207,7 @@ function PackingList({
         </>
       )}
       {items && items.length === 0 && (
-        <p className="text-sm text-muted">清单为空，可在下方添加自定义物品。</p>
+        <p className="text-sm text-muted">清单是空的，可以在下面自己添加。</p>
       )}
     </Panel>
   );
@@ -2273,7 +2273,7 @@ function BudgetPanel({
     <div className="mt-6 rounded-card border border-line bg-surface p-5 shadow-soft">
       <div className="flex items-baseline justify-between">
         <h3 className="font-serif text-base font-bold text-ink">预算成本</h3>
-        <span className="text-xs text-muted">估算总额 · 随编辑实时更新</span>
+        <span className="text-xs text-muted">估算总额 · 改动后自动更新</span>
       </div>
 
       {/* 总额 vs 预算 */}
@@ -2324,11 +2324,11 @@ function BudgetPanel({
           {"　"}
           {actual.sum <= actual.est ? (
             <span className="text-teal-dark">
-              比这些项的计划省 {formatCny(actual.est - actual.sum)}
+              比原计划省了 {formatCny(actual.est - actual.sum)}
             </span>
           ) : (
             <span className="text-seal">
-              比这些项的计划多 {formatCny(actual.sum - actual.est)}
+              比原计划多花了 {formatCny(actual.sum - actual.est)}
             </span>
           )}
         </div>
@@ -2417,7 +2417,7 @@ function TrustBadge({
         href={p.sourceUrl}
         target="_blank"
         rel="noreferrer"
-        title="有可核实来源，点击核对"
+        title="有可核实的来源，点开看看"
         onClick={() => logEvent("source_open", { via: "item_badge", kind }, tripId)}
         className="seal-stamp transition hover:bg-seal-tint"
       >
@@ -2535,7 +2535,7 @@ function ItemCard({
       </span>
       <span
         className="inline-flex items-center gap-0.5 text-muted/80"
-        title="实际花费（旅途记账，预算面板会汇总对照）"
+        title="实际花费（记上后，预算里会自动对照）"
       >
         <span className="text-[10px]">实际</span>
         <input
@@ -2568,7 +2568,7 @@ function ItemCard({
             });
           }}
           className="inline-flex items-center gap-0.5 text-muted transition hover:text-teal-dark cursor-pointer"
-          title="为什么推荐它"
+          title="为什么推荐"
         >
           <Info className="h-3.5 w-3.5" aria-hidden />
           为什么
@@ -2697,7 +2697,7 @@ function ItemCard({
           <div className="flex items-start gap-2 px-4 pb-2.5 pt-3">
             <span
               className="mt-1 cursor-grab select-none text-muted/50"
-              title="拖拽排序"
+              title="拖动排序"
               aria-hidden
             >
               <GripVertical className="h-4 w-4" />
@@ -2748,7 +2748,7 @@ function ItemCard({
               <div className="flex items-start gap-2">
                 <span
                   className="mt-1.5 cursor-grab select-none text-muted/50"
-                  title="拖拽排序"
+                  title="拖动排序"
                   aria-hidden
                 >
                   <GripVertical className="h-4 w-4" />
@@ -2862,8 +2862,8 @@ function TransitSearch({
   const isFlight = mode === "flight";
   const endpoint = isFlight ? "/api/flights" : "/api/trains";
   const accent = isFlight
-    ? { noun: "航班", empty: "未搜到航班" }
-    : { noun: "趟", empty: "未搜到车次" };
+    ? { noun: "航班", empty: "没搜到航班" }
+    : { noun: "趟", empty: "没搜到车次" };
 
   async function run() {
     if (!from || !to) {
@@ -2922,7 +2922,7 @@ function TransitSearch({
         <>
           {items.length > 0 && (
             <p className="mt-2 text-[11px] text-muted">
-              共 {items.length} {accent.noun} · 滚动浏览，点选替换该条目
+              共 {items.length} {accent.noun} · 点一个替换这一项
             </p>
           )}
           <ul className="mt-1 max-h-80 space-y-1 overflow-y-auto pr-1">
@@ -3068,9 +3068,9 @@ function PlanningBoard({
     <div className="mx-auto max-w-3xl">
       <div className="mt-6 flex items-end justify-between gap-3">
         <div>
-          <span className="ed-eyebrow">多智能体协作中</span>
+          <span className="ed-eyebrow">AI 正在规划</span>
           <h1 className="font-serif mt-2 text-2xl font-bold tracking-tight text-ink">
-            正在编排
+            正在规划
             {destination
               ? `「${origin ? `${origin} → ` : ""}${destination}」`
               : "你的行程"}
@@ -3086,7 +3086,7 @@ function PlanningBoard({
         <div className="font-data flex items-center justify-between gap-2 text-xs text-muted">
           <span className="font-semibold text-ink">{origin || "出发地"}</span>
           <span>
-            {doneCount}/{AGENTS.length} 位专家完成
+            {doneCount}/{AGENTS.length} 个 AI 完成
           </span>
           <span className="font-semibold text-ink">{destination || "目的地"}</span>
         </div>
@@ -3147,13 +3147,13 @@ function PlanningBoard({
               <p className="mt-1.5 min-h-4 text-xs leading-relaxed text-muted">
                 {st === "running"
                   ? a.search
-                    ? "正在联网检索真实数据…"
-                    : "正在推理…"
+                    ? "正在联网查真实数据…"
+                    : "正在思考…"
                   : st === "done"
                     ? summary || "完成"
                     : st === "error"
                       ? "出错了，正在重试…"
-                      : "等待上游产物…"}
+                      : "等前面的结果…"}
               </p>
             </li>
           );
@@ -3163,7 +3163,7 @@ function PlanningBoard({
       {streamLost ? (
         <div className="mt-6 flex items-center justify-between gap-3 rounded-card border border-seal/30 bg-seal-tint px-4 py-3">
           <p className="text-sm text-seal">
-            与规划服务的连接中断了。已完成的步骤都已保存，重试会从断点继续。
+            和规划服务的连接断了。已经完成的步骤都保存了，点继续会接着做。
           </p>
           <button
             onClick={onRetry}
@@ -3177,8 +3177,8 @@ function PlanningBoard({
           {loading
             ? "加载中…"
             : finished
-              ? "行程出炉！正在为你展开…"
-              : "8 位专家实时联网协作中，约需 1~3 分钟——每位专家完成即亮出成果。"}
+              ? "行程好了！正在为你打开…"
+              : "8 个 AI 正在一起规划，大约要 1~3 分钟，每完成一个就会显示结果。"}
         </p>
       )}
 
@@ -3201,7 +3201,7 @@ function PlanningBoard({
               行程已就绪
             </p>
             <p className="font-data mt-2 text-xs text-muted">
-              {AGENTS.length} 位专家 · 全部到站
+              {AGENTS.length} 个 AI · 全部完成
             </p>
           </motion.div>
         </motion.div>

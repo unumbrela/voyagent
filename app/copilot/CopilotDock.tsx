@@ -31,17 +31,19 @@ import {
   Sparkles,
 } from "@/app/ui/icons";
 import type { DigitalHumanHandle, Emotion } from "./DigitalHuman";
-import { AVATAR_MODE } from "./avatar-config";
+import { AVATAR_MODE, AVATAR_3D_MODELS, DEFAULT_3D_MODEL_ID } from "./avatar-config";
 
 // 数字人仅客户端加载；chunk 加载期间给出夜空占位。
-// 形象三选一：video 真人循环视频（默认）/ image 写实立绘 / svg 手绘木偶。
+// 形象四选一：three 实时 3D 数字人（默认）/ video 真人循环视频 / image 写实立绘 / svg 手绘木偶。
 const DigitalHuman = dynamic(
   () =>
-    AVATAR_MODE === "video"
-      ? import("./DigitalHumanVideo")
-      : AVATAR_MODE === "image"
-        ? import("./DigitalHumanImage")
-        : import("./DigitalHuman"),
+    AVATAR_MODE === "three"
+      ? import("./DigitalHuman3D")
+      : AVATAR_MODE === "video"
+        ? import("./DigitalHumanVideo")
+        : AVATAR_MODE === "image"
+          ? import("./DigitalHumanImage")
+          : import("./DigitalHuman"),
   {
     ssr: false,
     loading: () => (
@@ -50,7 +52,15 @@ const DigitalHuman = dynamic(
       </div>
     ),
   },
-);
+  // 各形象组件 props 不完全一致（仅 three 版认 modelId）；显式声明并集，让 <DigitalHuman modelId> 通过类型
+) as React.ComponentType<{
+  apiRef: React.MutableRefObject<DigitalHumanHandle | null>;
+  muted?: boolean;
+  variant?: "full" | "bubble";
+  modelId?: string;
+  onSpeakingChange?: (speaking: boolean) => void;
+  onError?: (msg: string) => void;
+}>;
 import type {
   AgentEvent,
   AgentMsg,
@@ -111,6 +121,8 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
   // 数字人（头像 + 语音 + 表情）开关与静音。默认开启：让小行以数字人形象出现。
   const [avatarOn, setAvatarOn] = useState(true);
   const [avatarMuted, setAvatarMuted] = useState(false);
+  // 选中的 3D 模型（远舟/林夏/小樱），仅 three 形象模式下可选
+  const [avatarModel, setAvatarModel] = useState(DEFAULT_3D_MODEL_ID);
   // 输入模式：语音优先（说完自动发送），可切键盘；浏览器不支持 Web Speech 时自动回落键盘
   const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
   // 视图：对话 / 记忆管理（「小行记得你」——AI 记了什么，可见可控）
@@ -130,6 +142,8 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
       // 会让气泡常驻指南针（产品已改为数字人优先，旧值一律作废）。
       setAvatarOn(localStorage.getItem("hci_avatar_style") !== "agent");
       setAvatarMuted(localStorage.getItem("hci_avatar_muted") === "1");
+      const savedModel = localStorage.getItem("hci_avatar_model");
+      if (savedModel && AVATAR_3D_MODELS.some((m) => m.id === savedModel)) setAvatarModel(savedModel);
       if (localStorage.getItem("hci_input_mode") === "text") setInputMode("text");
     } catch {
       /* 无存储：用默认值 */
@@ -209,6 +223,17 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
       logEvent("avatar_mute", { muted: next }, getController()?.getTripId() ?? null);
       return next;
     });
+  }
+
+  function pickAvatarModel(id: string) {
+    dhRef.current?.stop(); // 切模型会重载场景，先停当前朗读
+    setAvatarModel(id);
+    try {
+      localStorage.setItem("hci_avatar_model", id);
+    } catch {
+      /* 忽略 */
+    }
+    logEvent("avatar_model", { model: id }, getController()?.getTripId() ?? null);
   }
 
   useEffect(() => {
@@ -404,7 +429,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
   function addItemToTrip(item: ItinItem, note: string) {
     const c = getController();
     if (!c) {
-      setItems((s) => [...s, { kind: "notice", text: "请在某个行程页里再加入哦" }]);
+      setItems((s) => [...s, { kind: "notice", text: "请先打开一个行程，再加进去。" }]);
       return;
     }
     const days = c.getDays();
@@ -413,7 +438,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
       i === 0 ? { ...d, items: [...d.items, item] } : d,
     );
     c.applyDays(next);
-    setItems((s) => [...s, { kind: "notice", text: note + "（第1天，可拖拽调整）", undo: true }]);
+    setItems((s) => [...s, { kind: "notice", text: note + "（已加到第 1 天，可拖动调整）", undo: true }]);
   }
 
   return (
@@ -436,13 +461,13 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                 background:
                   "conic-gradient(from 210deg, #2fd4c6, #7c6bff 40%, #2fd4c6 72%, #ffb45e 88%, #2fd4c6)",
               }}
-              title="打开旅行智能体 · 小行"
-              aria-label="打开旅行智能体 小行"
+              title="打开旅行助手 · 小行"
+              aria-label="打开旅行助手 小行"
             >
               {avatarOn ? (
                 // 数字人头像（画布不接管点击，交给按钮打开面板）
                 <span className="pointer-events-none block h-full w-full overflow-hidden rounded-full ring-1 ring-white/25">
-                  <DigitalHuman apiRef={dhRef} muted variant="bubble" />
+                  <DigitalHuman apiRef={dhRef} muted variant="bubble" modelId={avatarModel} />
                 </span>
               ) : (
                 <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(160deg,#1b2456,#0b1124)] text-[#7ee8dd] ring-1 ring-white/25">
@@ -454,8 +479,8 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
             <button
               onClick={toggleAvatar}
               className="absolute -left-1.5 -top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-[#0b1124]/85 text-[#7ee8dd] shadow-md backdrop-blur transition hover:scale-110 hover:text-white"
-              title={avatarOn ? "切换为智能体图标" : "切换为数字人形象"}
-              aria-label={avatarOn ? "切换为智能体图标" : "切换为数字人形象"}
+              title={avatarOn ? "切换成图标" : "切换成数字人"}
+              aria-label={avatarOn ? "切换成图标" : "切换成数字人"}
             >
               {avatarOn ? (
                 <Compass className="h-3.5 w-3.5" aria-hidden />
@@ -490,10 +515,10 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                 <Compass className="h-5 w-5" aria-hidden />
                 <div className="leading-tight">
                   <div className="font-display text-sm font-semibold">
-                    小行 · 旅行智能体
+                    小行 · 旅行助手
                   </div>
                   <div className="text-[10px] text-teal-tint">
-                    能规划 · 能改行程 · 能搜真实车次航班
+                    能规划 · 能改行程 · 能查真实车票航班
                   </div>
                 </div>
               </div>
@@ -512,8 +537,8 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                       ? "bg-white/20 text-white"
                       : "text-teal-tint hover:bg-white/10"
                   }`}
-                  title="小行记得你（记忆管理）"
-                  aria-label="记忆管理"
+                  title="小行记住的偏好"
+                  aria-label="小行记住的偏好"
                   aria-pressed={view === "memory"}
                 >
                   <Brain className="h-4 w-4" aria-hidden />
@@ -531,15 +556,15 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
 
             {/* 控制条：改动前先预览（RQ1 控制权） */}
             <label className="flex cursor-pointer items-center justify-between border-b border-line bg-surface-2/60 px-4 py-1.5 text-[11px] text-muted">
-              <span title="开启后，AI 的每次改动都会先给你预览卡，确认后才应用（更有掌控感）；关闭时小改动会直接生效、可撤销（更省事）。">
-                改动前先让我确认
+              <span title="开启后，小行每次改行程都会先给你看一遍，你点确认才会改；关闭时小改动直接生效，也随时能撤销。">
+                改行程前先问我
               </span>
               <Switch checked={alwaysPreview} onToggle={toggleAlwaysPreview} />
             </label>
 
             {/* 控制条：数字人形象（3D 头像 + 语音 + 表情） */}
             <div className="flex items-center justify-between border-b border-line bg-surface-2/60 px-4 py-1.5 text-[11px] text-muted">
-              <span title="开启后小行以数字人形象出现：会朗读回复、说话时有口型与表情；右下角气泡也会显示数字人头像">
+              <span title="开启后小行会以数字人出现：会读出回复，说话时有口型和表情，右下角的小圆头像也会变成数字人。">
                 数字人形象
               </span>
               <div className="flex items-center gap-2">
@@ -568,8 +593,30 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                 <DigitalHuman
                   apiRef={dhRef}
                   muted={avatarMuted}
+                  modelId={avatarModel}
                   onSpeakingChange={setSpeaking}
                 />
+                {/* 模型选择器（仅 three 实时 3D 形象下可选：远舟 / 林夏 / 小樱） */}
+                {AVATAR_MODE === "three" && (
+                  <div className="absolute left-2 top-2 flex gap-1 rounded-full bg-[#0b1124]/60 p-0.5 backdrop-blur">
+                    {AVATAR_3D_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => pickAvatarModel(m.id)}
+                        title={m.desc}
+                        aria-pressed={avatarModel === m.id}
+                        className={`cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
+                          avatarModel === m.id
+                            ? "bg-[#2fd4c6] text-[#0b1124]"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {speaking && (
                   <div
                     className="absolute bottom-2 right-2 flex h-6 items-end gap-[3px] rounded-full bg-[#0b1124]/60 px-2.5 pb-1.5 backdrop-blur"
@@ -595,7 +642,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
               {items.length === 0 && (
                 <div className="mt-2">
                   <p className="text-sm text-muted">
-                    你好，我是小行 👋 告诉我你想去哪、想怎么玩，我可以帮你从零规划、调整行程、搜车票航班、查天气。
+                    你好，我是小行 👋 告诉我你想去哪、想怎么玩，我能帮你从头规划、调整行程、查车票和航班、看天气。
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {(getController() ? TRIP_SUGGESTIONS : STARTERS).map((s) => (
@@ -620,7 +667,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                       className="flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-muted"
                     >
                       <Brain className="h-3 w-3 shrink-0 text-teal-dark" aria-hidden />
-                      <span>参考了你的偏好：</span>
+                      <span>用到了你的偏好：</span>
                       {it.texts.slice(0, 3).map((t, j) => (
                         <span
                           key={j}
@@ -690,10 +737,10 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
                     <div key={i} className="px-1 text-[11px] text-muted">
                       {it.done === "applied" ? (
                         <span className="text-teal-dark">
-                          建议改动（{it.diff.changedCount} 天）已应用 ✓
+                          已改好 {it.diff.changedCount} 天 ✓
                         </span>
                       ) : (
-                        <span>建议改动（{it.diff.changedCount} 天）已放弃</span>
+                        <span>已放弃这次改动（{it.diff.changedCount} 天）</span>
                       )}
                     </div>
                   );
@@ -722,7 +769,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
             <div className="border-t border-line p-2.5">
               {!signedIn ? (
                 <p className="px-1 py-2 text-center text-xs text-muted">
-                  登录后即可使用小行 ·{" "}
+                  登录后就能用小行 ·{" "}
                   <a href="/login" className="text-teal-dark hover:underline">
                     去登录
                   </a>
@@ -854,8 +901,8 @@ function MemoryPanel({ tripId }: { tripId: string | null }) {
   return (
     <div className="flex-1 overflow-y-auto p-3">
       <p className="text-xs leading-relaxed text-muted">
-        这些是小行从你的输入里学到的长期偏好（跨行程生效，用于个性化规划）。
-        删掉的不再被参考。
+        这些是小行从你的话里记住的偏好，以后每次帮你规划都会用到。
+        删掉的就不再参考了。
       </p>
       {err && <p className="mt-2 text-xs text-seal">{err}</p>}
       {mems === null && !err && (
@@ -863,7 +910,7 @@ function MemoryPanel({ tripId }: { tripId: string | null }) {
       )}
       {mems && mems.length === 0 && (
         <p className="mt-4 text-center text-xs text-muted">
-          还没有记忆——多和小行聊聊你的偏好吧。
+          还没记住什么，多和小行聊聊你的喜好吧。
         </p>
       )}
       <ul className="mt-2 space-y-1.5">
@@ -877,7 +924,7 @@ function MemoryPanel({ tripId }: { tripId: string | null }) {
               <p className="text-xs leading-relaxed text-ink/85">{m.text}</p>
               <p className="mt-0.5 text-[10px] text-muted/70">
                 {m.kind === "semantic" ? "偏好" : "情景"}
-                {m.subject ? ` · ${m.subject}` : ""} · 被参考 {m.use_count} 次
+                {m.subject ? ` · ${m.subject}` : ""} · 用过 {m.use_count} 次
               </p>
             </div>
             <button

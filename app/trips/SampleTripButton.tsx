@@ -41,7 +41,7 @@ export function SampleTripButton() {
         ) : (
           <Sparkles className="h-4 w-4" aria-hidden />
         )}
-        {busy ? "正在装箱…" : "先看示例：无锡 → 苏州三日"}
+        {busy ? "载入中…" : "先看示例：无锡 → 苏州三日"}
       </button>
       {err && <span className="text-xs text-seal">{err}</span>}
     </span>

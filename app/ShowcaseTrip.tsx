@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * 落地页「行程 + 地图」实景演示：无锡 → 苏州 · 三日两晚。
- * 不是效果图——数据为真实地点/车次/票价（手工核对），坐标内置（不走 geocode，秒开且确定性）。
- * 右侧地图：配置 NEXT_PUBLIC_AMAP_KEY 时为高德 3D 斜俯视（ShowcaseMapAMap），
- * 否则降级为 Leaflet 2D（ShowcaseMapLeaflet）。左侧时间轴与地图针脚双向联动。
+ * 「行程 + 地图」实景演示组件。首页展示带默认渲染「无锡 → 苏州」；
+ * /demo/[slug] 传入对应 demo 的 days/标题/底图模式复用同一套双向联动 UI。
+ *
+ * 右侧地图：tiles="amap" 且配置 NEXT_PUBLIC_AMAP_KEY 时叠加高德 3D 斜俯视，
+ * 否则（含所有出境 osm demo）用 Leaflet 2D。左侧时间轴与地图针脚双向联动。
  * 数据与类别词汇表集中在 app/showcase-data.ts。
  */
 
@@ -12,18 +13,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, useInView } from "motion/react";
 import { dayColorOf } from "@/lib/palette";
-import { TrainFront, KIND_ICONS } from "@/app/ui/icons";
+import { TrainFront, Plane, KIND_ICONS } from "@/app/ui/icons";
 import {
   DAYS,
   KIND_COLOR,
   KIND_LABEL,
   haversineKm,
+  type ShowDay,
 } from "@/app/showcase-data";
 
 const ShowcaseMapAMap = dynamic(() => import("./ShowcaseMapAMap"), { ssr: false });
 const ShowcaseMapLeaflet = dynamic(() => import("./ShowcaseMapLeaflet"), { ssr: false });
-// key 在构建期内联；有 key 走高德 3D，无 key 走 Leaflet 降级
-const USE_AMAP = !!process.env.NEXT_PUBLIC_AMAP_KEY;
+// key 在构建期内联；有 key 且底图为高德时走 3D，否则走 Leaflet
+const HAS_AMAP_KEY = !!process.env.NEXT_PUBLIC_AMAP_KEY;
+
+/** 地图缩放接口：Leaflet / 高德各自实现并登记，供统一 +/- 控件调用 */
+type ZoomApi = { zoomIn: () => void; zoomOut: () => void };
 
 const riseItem = {
   hidden: { opacity: 0, x: -14 },
@@ -34,12 +39,35 @@ const riseItem = {
   }),
 };
 
-export default function ShowcaseTrip() {
+interface Props {
+  /** 逐日行程（默认首页苏州 DAYS，向后兼容） */
+  days?: ShowDay[];
+  /** 顶栏主标题（如「无锡 → 苏州 · 江南三日」） */
+  title?: string;
+  /** 顶栏副标题（日期 · 人数 · 时长） */
+  subtitle?: string;
+  /** 顶栏右侧徽标文案 */
+  badge?: string;
+  /** 底图/坐标模式：amap（国内）/ osm（出境） */
+  tiles?: "amap" | "osm";
+  /** 主交通方式，决定顶栏图标（火车/飞机） */
+  transport?: "train" | "flight";
+}
+
+export default function ShowcaseTrip({
+  days = DAYS,
+  title = "无锡 → 苏州 · 江南三日",
+  subtitle = "07.10 周五 – 07.12 周日 · 2 人 · 三日两晚",
+  badge = "真实数据 · 可点可拖",
+  tiles = "amap",
+  transport = "train",
+}: Props = {}) {
   const [dayIdx, setDayIdx] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
-  const [interacted, setInteracted] = useState(false);
+  // 鼠标是否悬于整个「行程 + 地图」区域：一旦进入即暂停轮播，移出后自动恢复
+  const [hovering, setHovering] = useState(false);
   // 地图分层：底层 Leaflet 2D 瞬间出图；高德 3D 后台加载，canvas 就绪(amapReady)后淡入覆盖；
-  // 鉴权失败/超时(amapFailed)则永远保持底层 Leaflet —— 首页地图绝不留白
+  // 鉴权失败/超时(amapFailed)则永远保持底层 Leaflet —— 地图绝不留白
   const [amapReady, setAmapReady] = useState(false);
   const [amapFailed, setAmapFailed] = useState(false);
   const [reduced] = useState(
@@ -48,20 +76,38 @@ export default function ShowcaseTrip() {
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
 
+  // 仅国内(amap)且有 key 时叠高德 3D；出境 osm demo 永远用 Leaflet（高德海外注记稀疏）
+  const useAmap = tiles === "amap" && HAS_AMAP_KEY;
+  const TransportIcon = transport === "flight" ? Plane : TrainFront;
+
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { amount: 0.35 });
 
-  const d = DAYS[dayIdx];
+  // 统一缩放：两张地图各自登记 zoomIn/zoomOut，+/- 覆盖控件按当前生效的图路由（高德就绪→控高德，否则→控 Leaflet）
+  const amapZoomRef = useRef<ZoomApi | null>(null);
+  const leafletZoomRef = useRef<ZoomApi | null>(null);
+  const amapActive = useAmap && amapReady && !amapFailed;
+  function doZoom(dir: 1 | -1) {
+    // 优先驱动当前生效的图；若它尚未登记接口，退回另一张，确保按钮永远有反馈
+    const api = amapActive
+      ? amapZoomRef.current ?? leafletZoomRef.current
+      : leafletZoomRef.current ?? amapZoomRef.current;
+    if (!api) return;
+    if (dir > 0) api.zoomIn();
+    else api.zoomOut();
+  }
+
+  const d = days[dayIdx];
   const color = dayColorOf(d.day);
 
-  // 入视口自动轮播三天：悬停暂停，点击切天后永久停止
+  // 入视口自动轮播；鼠标一旦进入组件区域即暂停，移出后自动恢复
   useEffect(() => {
-    if (!inView || interacted || hover !== null || reduced) return;
+    if (!inView || hovering || reduced) return;
     const t = setTimeout(() => {
-      setDayIdx((i) => (i + 1) % DAYS.length);
+      setDayIdx((i) => (i + 1) % days.length);
     }, 6000);
     return () => clearTimeout(t);
-  }, [inView, interacted, hover, dayIdx, reduced]);
+  }, [inView, hovering, dayIdx, reduced, days.length]);
 
   const dayKm = useMemo(() => {
     let km = 0;
@@ -71,7 +117,6 @@ export default function ShowcaseTrip() {
   }, [d]);
 
   function pickDay(i: number) {
-    setInteracted(true);
     setHover(null);
     setDayIdx(i);
   }
@@ -79,28 +124,31 @@ export default function ShowcaseTrip() {
   return (
     <div
       ref={rootRef}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => {
+        setHovering(false);
+        setHover(null);
+      }}
       className="overflow-hidden rounded-card border border-line bg-surface shadow-lift"
     >
       {/* ── 顶栏：行程档案头 + 切天 tabs ── */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b border-line bg-surface-2/60 px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-ink text-white">
-            <TrainFront className="h-4.5 w-4.5" aria-hidden />
+            <TransportIcon className="h-4.5 w-4.5" aria-hidden />
           </span>
           <div>
             <p className="font-serif text-[15px] font-bold leading-tight text-ink">
-              无锡 → 苏州 · 江南三日
+              {title}
             </p>
-            <p className="font-data mt-0.5 text-[11px] text-muted">
-              07.10 周五 – 07.12 周日 · 2 人 · 三日两晚
-            </p>
+            <p className="font-data mt-0.5 text-[11px] text-muted">{subtitle}</p>
           </div>
         </div>
         <span className="rounded-pill bg-teal-tint px-2.5 py-1 text-[11px] font-semibold text-teal-dark">
-          真实数据 · 可交互
+          {badge}
         </span>
         <div className="ml-auto flex flex-wrap gap-1.5" role="tablist" aria-label="切换天数">
-          {DAYS.map((dd, i) => {
+          {days.map((dd, i) => {
             const active = i === dayIdx;
             const cc = dayColorOf(dd.day);
             return (
@@ -163,6 +211,8 @@ export default function ShowcaseTrip() {
               {d.stops.map((s, i) => {
                 const KindIcon = KIND_ICONS[s.kind];
                 const hot = hover === i;
+                const isFlight = s.ticket?.mode === "flight";
+                const TicketIcon = isFlight ? Plane : TrainFront;
                 return (
                   <motion.li
                     key={s.title}
@@ -175,7 +225,7 @@ export default function ShowcaseTrip() {
                     <span className="font-data pt-2.5 text-right text-[11px] leading-none text-muted">
                       {s.time}
                     </span>
-                    {/* 节点按【类别】着色，与地图针脚同色同图标 */}
+                    {/* 节点按【类别】着色 + 序号，与地图针脚同色同号 */}
                     <span
                       className="sc-node relative mt-1 justify-self-center transition-transform"
                       style={{
@@ -183,15 +233,15 @@ export default function ShowcaseTrip() {
                         transform: hot ? "scale(1.16)" : undefined,
                       } as React.CSSProperties}
                     >
-                      <KindIcon aria-hidden />
+                      <span className="text-[13px] font-bold leading-none">{i + 1}</span>
                     </span>
 
                     {s.ticket ? (
-                      /* 交通条目：登机牌式票根 */
+                      /* 交通条目：登机牌 / 车票式票根 */
                       <div className={`ticket px-4 py-2.5 ${hot ? "shadow-lift" : ""}`}>
                         <div className="flex items-center justify-between gap-2">
                           <p className="flex min-w-0 items-center gap-1.5 truncate text-[13px] font-semibold text-ink">
-                            <TrainFront
+                            <TicketIcon
                               className="h-3.5 w-3.5 shrink-0"
                               style={{ color: "var(--c-transit)" }}
                               aria-hidden
@@ -220,8 +270,14 @@ export default function ShowcaseTrip() {
                           </span>
                         </div>
                         <p className="font-data mt-1.5 text-[11px] text-muted">
-                          {s.ticket.seat} {s.cost} · 12306 可订
+                          {s.ticket.seat} {s.cost} ·{" "}
+                          {isFlight ? "航司官网可订" : "12306 可订"}
                         </p>
+                        {s.ticket.via && (
+                          <p className="mt-1 text-[11px] leading-relaxed text-muted/85">
+                            {s.ticket.via}
+                          </p>
+                        )}
                       </div>
                     ) : (
                       /* 普通条目：地点卡 */
@@ -269,7 +325,7 @@ export default function ShowcaseTrip() {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-3">
             <span className="font-data text-xs text-muted">
-              {d.stops.length} 站 · 动线 ≈ {dayKm.toFixed(1)} km
+              {d.stops.length} 站 · 路线 ≈ {dayKm.toFixed(1)} km
             </span>
             <span className="font-data text-xs font-semibold text-ink">
               {d.summary}
@@ -280,10 +336,18 @@ export default function ShowcaseTrip() {
         {/* ── 右：真实地图（高德 3D / Leaflet 降级） ── */}
         <div className="relative min-h-[400px] bg-[#eef1ee] lg:min-h-0">
           {/* 底：Leaflet 2D —— 瞬间出图、绝不空白；高德就绪后被覆盖 */}
-          <ShowcaseMapLeaflet dayIdx={dayIdx} hover={hover} onHover={setHover} reduced={reduced} />
+          <ShowcaseMapLeaflet
+            dayIdx={dayIdx}
+            hover={hover}
+            onHover={setHover}
+            reduced={reduced}
+            days={days}
+            tiles={tiles}
+            onZoomApi={(api) => (leafletZoomRef.current = api)}
+          />
 
-          {/* 顶：高德 3D —— canvas 真正渲染出来后淡入覆盖；失败则保持底层 Leaflet */}
-          {USE_AMAP && !amapFailed && (
+          {/* 顶：高德 3D —— 仅国内 amap demo 且有 key 时启用 */}
+          {useAmap && !amapFailed && (
             <div
               className="absolute inset-0 z-[1] transition-opacity duration-700"
               style={{ opacity: amapReady ? 1 : 0, pointerEvents: amapReady ? "auto" : "none" }}
@@ -296,9 +360,32 @@ export default function ShowcaseTrip() {
                 reduced={reduced}
                 onReady={() => setAmapReady(true)}
                 onError={() => setAmapFailed(true)}
+                onZoomApi={(api) => (amapZoomRef.current = api)}
               />
             </div>
           )}
+
+          {/* 统一 +/- 缩放控件：置于右上（避开左上「当天信息」浮层），驱动当前生效的地图。
+              不依赖 Leaflet 原生控件 / 高德 ToolBar 插件，两图行为一致、必然可见可点。 */}
+          <div className="absolute right-3 top-3 z-[1001] flex flex-col overflow-hidden rounded-lg border border-line bg-white/92 shadow-soft backdrop-blur">
+            <button
+              type="button"
+              onClick={() => doZoom(1)}
+              aria-label="放大"
+              className="grid h-8 w-8 cursor-pointer place-items-center text-xl font-semibold leading-none text-ink transition hover:bg-surface-2"
+            >
+              +
+            </button>
+            <span className="h-px w-full bg-line" aria-hidden />
+            <button
+              type="button"
+              onClick={() => doZoom(-1)}
+              aria-label="缩小"
+              className="grid h-8 w-8 cursor-pointer place-items-center text-xl font-semibold leading-none text-ink transition hover:bg-surface-2"
+            >
+              −
+            </button>
+          </div>
 
           {/* 当天信息浮层 */}
           <motion.div

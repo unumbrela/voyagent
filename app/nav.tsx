@@ -20,8 +20,8 @@ export function Nav({ email }: { email: string | null }) {
     router.refresh();
   }
 
-  // 落地页：透明悬浮在暮色 hero 之上（白字）；其余页：白色 sticky 栏
-  const onNight = pathname === "/";
+  // 落地页与 demo 演示页：透明悬浮在暮色 hero 之上（白字）；其余页：白色 sticky 栏
+  const onNight = pathname === "/" || pathname.startsWith("/demo");
 
   return (
     <header

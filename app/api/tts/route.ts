@@ -126,6 +126,11 @@ const azureTTS: Synth = async (text) => {
 // ── ZenMux TTS（OpenAI 兼容 /audio/speech；Gemini-TTS 只吐 PCM，服务端包成 WAV）──
 // 用户已有的 ZENMUX_API_KEY 即可发声：比浏览器 Web Speech 好听得多，且走 <audio> 可被
 // Web Audio 实时分析响度 → 数字人口型跟着真实语音开合（Web Speech 的声音无法被分析）。
+//
+// ⚠️ 关键：ZenMux 对 Gemini-TTS 的 `response_format: "pcm"` **不是**返回裸二进制 PCM，
+// 而是返回 JSON：{ audio: <base64(PCM L16)>, mime_type: "audio/l16; rate=24000", ... }。
+// 之前直接把整段 JSON 文本当成 PCM 塞进 WAF 头 → 浏览器把 JSON 字符串当 16bit 采样播放，
+// 结果就是「满量程白噪音、声音巨大」。必须先解 JSON、base64 解码，再包 WAV。
 const zenmuxTTS: Synth = async (text) => {
   const base = process.env.ZENMUX_BASE_URL || "https://zenmux.ai/api/v1";
   const res = await fetch(`${base}/audio/speech`, {
@@ -143,8 +148,22 @@ const zenmuxTTS: Synth = async (text) => {
     }),
   });
   if (!res.ok) throw new Error(`ZenMux ${res.status}: ${await res.text()}`);
-  const pcm = await res.arrayBuffer();
-  const rate = Number(process.env.TTS_PCM_RATE || 24000);
+
+  const ct = res.headers.get("content-type") || "";
+  let pcm: ArrayBuffer;
+  let rate = Number(process.env.TTS_PCM_RATE || 24000);
+  if (ct.includes("json")) {
+    const json = (await res.json()) as { audio?: string; mime_type?: string };
+    if (!json.audio) throw new Error("ZenMux 返回缺少 audio 字段");
+    // mime_type 形如 "audio/l16; rate=24000"，采样率以它为准（回退到 env / 24000）
+    const m = /rate=(\d+)/.exec(json.mime_type || "");
+    if (m) rate = Number(m[1]);
+    const b = Buffer.from(json.audio, "base64");
+    pcm = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  } else {
+    // 兼容将来可能改回裸二进制 PCM 的情况
+    pcm = await res.arrayBuffer();
+  }
   return pcmToWav(pcm, rate, 1, 16);
 };
 

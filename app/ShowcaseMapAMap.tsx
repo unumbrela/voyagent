@@ -18,7 +18,7 @@ import AMapLoader from "@amap/amap-jsapi-loader";
 import "@amap/amap-jsapi-types";
 import { dayColorOf } from "@/lib/palette";
 import { wgs84ToGcj02 } from "@/lib/gcj02";
-import { DAYS, KIND_HEX, KIND_LABEL, iconSvg } from "@/app/showcase-data";
+import { DAYS, KIND_HEX, KIND_LABEL } from "@/app/showcase-data";
 
 declare global {
   interface Window {
@@ -35,6 +35,8 @@ interface Props {
   onReady?: () => void;
   /** 高德加载/鉴权失败时回调（父组件据此保持底层 Leaflet） */
   onError?: () => void;
+  /** 就绪后向父组件登记缩放接口（供统一的 +/- 覆盖控件驱动），卸载时回传 null */
+  onZoomApi?: (api: { zoomIn: () => void; zoomOut: () => void } | null) => void;
 }
 
 /** AMapLoader.load 返回运行时命名空间对象；只声明用到的构造器（避免 any） */
@@ -47,8 +49,8 @@ type AMapApi = {
 const KEY = process.env.NEXT_PUBLIC_AMAP_KEY;
 const SECURITY = process.env.NEXT_PUBLIC_AMAP_SECURITY;
 
-const PITCH = 48; // 俯仰角（0=正俯视，越大越贴地平线）
-const ROTATION = -14; // 微转一点，立体感更强
+const PITCH = 45; // 俯仰角（0=正俯视，越大越贴地平线）——恢复 3D 斜俯视观感
+const ROTATION = -12; // 微转一点，立体感更强
 
 /** [lat,lon] WGS-84 → [lng,lat] GCJ-02（AMap 经度在前） */
 function toAMap(lat: number, lon: number): [number, number] {
@@ -57,13 +59,18 @@ function toAMap(lat: number, lon: number): [number, number] {
 }
 
 /** 单个针脚 + 常驻名称标签的 DOM（复用全站水滴针脚 .tp-pin） */
-function makeMarkerEl(kind: keyof typeof KIND_HEX, name: string, delay: number): HTMLDivElement {
+function makeMarkerEl(
+  kind: keyof typeof KIND_HEX,
+  name: string,
+  num: number,
+  delay: number,
+): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "amp";
   el.style.setProperty("--c", KIND_HEX[kind]);
   el.innerHTML =
     `<div class="tp-pin tp-drop" style="animation-delay:${delay}ms">` +
-    `<div class="tp-pin-inner"><span class="tp-ico">${iconSvg(kind)}</span></div></div>` +
+    `<div class="tp-pin-inner"><span>${num}</span></div></div>` +
     `<span class="amp-label"><b>${name}</b><i>${KIND_LABEL[kind]}</i></span>`;
   return el;
 }
@@ -75,6 +82,7 @@ export default function ShowcaseMapAMap({
   reduced,
   onReady,
   onError,
+  onZoomApi,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<AMap.Map | null>(null);
@@ -85,9 +93,11 @@ export default function ShowcaseMapAMap({
   const [failed, setFailed] = useState(false);
   const onErrorRef = useRef(onError);
   const onReadyRef = useRef(onReady);
+  const onZoomApiRef = useRef(onZoomApi);
   useEffect(() => {
     onErrorRef.current = onError;
     onReadyRef.current = onReady;
+    onZoomApiRef.current = onZoomApi;
   });
 
   // ── 建图（一次） ──
@@ -132,22 +142,30 @@ export default function ShowcaseMapAMap({
           zoom: 14,
           center,
           mapStyle: "amap://styles/whitesmoke",
+          // 恢复原本的地图观感（浅底 + 路网 + 立体楼块 + 主要路名/大地名），但「粗略化」：
+          // features 去掉 "point"（POI 点图层）——只隐藏密密麻麻的小地标 POI，保留道路与
+          // 行政/大地名注记（showLabel:true），既不空、也不与小地标抢视线
           showBuildingBlock: true,
           showLabel: true,
-          features: ["bg", "road", "building", "point"],
-          // 展示图：锁死平移/缩放手势避免滚动误触；但保留 pitch/rotate 允许，
-          // 否则程序化 setPitch/setRotation 会被一并禁用 → 地图永远平的
-          dragEnable: false,
-          zoomEnable: false,
-          scrollWheel: false,
-          doubleClickZoom: false,
+          features: ["bg", "road", "building"],
+          // 全交互开放：拖拽平移 / 滚轮缩放 / 双击放大 / 旋转俯仰。滚轮缩放是最直觉的
+          // 「放大缩小」手势，且由高德在 canvas 上原生处理，不依赖 React 覆盖控件也必然可用
+          dragEnable: true,
+          zoomEnable: true,
+          scrollWheel: true,
+          doubleClickZoom: true,
           keyboardEnable: false,
           rotateEnable: true,
           pitchEnable: true,
-          jogEnable: false,
+          jogEnable: true,
           animateEnable: !reduced,
         } as AMap.MapOptions);
         mapRef.current = map;
+        // 向父组件登记缩放接口，供统一 +/- 覆盖控件调用（zoomIn/zoomOut 为核心方法，无需 ToolBar 插件）
+        onZoomApiRef.current?.({
+          zoomIn: () => map.zoomIn(),
+          zoomOut: () => map.zoomOut(),
+        });
         (window as unknown as { __scMap?: AMap.Map }).__scMap = map; // 临时：控制台可查 getPitch/getZoom
         // 可加覆盖物即开始绘制（complete 在鉴权失败时也会触发，故仅用于「可画」门控）
         map.on("complete", () => {
@@ -170,6 +188,7 @@ export default function ShowcaseMapAMap({
     return () => {
       disposed = true;
       clearInterval(poll);
+      onZoomApiRef.current?.(null);
       mapRef.current?.destroy();
       mapRef.current = null;
       apiRef.current = null;
@@ -219,7 +238,7 @@ export default function ShowcaseMapAMap({
     overlaysRef.current.push(under, route);
 
     cur.stops.forEach((s, i) => {
-      const el = makeMarkerEl(s.kind, s.short, reduced ? 0 : 140 + i * 90);
+      const el = makeMarkerEl(s.kind, s.short, i + 1, reduced ? 0 : 140 + i * 90);
       el.addEventListener("mouseenter", () => onHover(i));
       el.addEventListener("mouseleave", () => onHover(null));
       markerElsRef.current.push(el);

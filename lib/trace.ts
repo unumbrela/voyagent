@@ -31,14 +31,14 @@ export interface AgentTrace {
 
 /** 按执行顺序（波）排列的元信息，与 orchestrator WAVES 一致 */
 const META: { agent: AgentName; label: string; wave: number; what: string }[] = [
-  { agent: "enrichment", label: "目的地调研", wave: 1, what: "调研目的地背景：季节、货币、语言、安全与本地贴士" },
-  { agent: "activities", label: "活动推荐", wave: 1, what: "联网找真实景点/活动候选并说明理由" },
-  { agent: "food", label: "餐饮指南", wave: 1, what: "整理当地餐饮候选（菜系/区域/价位）" },
-  { agent: "accommodation", label: "住宿推荐", wave: 2, what: "按活动分布选区位、联网找真实住宿（带来源+预订链接）" },
-  { agent: "scheduling", label: "日程编排", wave: 3, what: "以住宿为锚点，把候选排成每日动线框架" },
-  { agent: "transport", label: "交通物流", wave: 4, what: "联网找真实去/返程班次（带来源+购票链接）" },
-  { agent: "hub_planner", label: "综合行程", wave: 5, what: "把上游产物综合成逐日成品行程" },
-  { agent: "validator", label: "出行质检", wave: 6, what: "对成品行程做出行前质检、挑出问题" },
+  { agent: "enrichment", label: "了解目的地", wave: 1, what: "了解目的地的基本情况：季节、货币、语言、安全和本地小贴士" },
+  { agent: "activities", label: "推荐活动", wave: 1, what: "上网找真实的景点和活动，并说明为什么推荐" },
+  { agent: "food", label: "推荐美食", wave: 1, what: "整理当地的餐厅（菜系、区域、价位）" },
+  { agent: "accommodation", label: "推荐住宿", wave: 2, what: "根据活动分布挑住的区域，上网找真实住宿（带来源和预订链接）" },
+  { agent: "scheduling", label: "安排日程", wave: 3, what: "以住宿为中心，把这些地方排成每天的大致路线" },
+  { agent: "transport", label: "安排交通", wave: 4, what: "上网找真实的去程和返程班次（带来源和购票链接）" },
+  { agent: "hub_planner", label: "汇总行程", wave: 5, what: "把前面的结果汇总成每天的完整行程" },
+  { agent: "validator", label: "检查行程", wave: 6, what: "在出发前检查整份行程，挑出问题" },
 ];
 
 const s = (v: unknown): string => (typeof v === "string" ? v.trim() : "");

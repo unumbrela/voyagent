@@ -26,6 +26,8 @@ import {
   ArrowRight,
   Star,
   Sparkles,
+  TrainFront,
+  Plane,
   type LucideIcon,
 } from "@/app/ui/icons";
 
@@ -33,6 +35,10 @@ import {
 const MapPicker = dynamic(() => import("./MapPicker"), { ssr: false });
 // 「行程+地图」实景演示：真实 Leaflet 地图 + 无锡→苏州三日真实行程
 const ShowcaseTrip = dynamic(() => import("./ShowcaseTrip"), { ssr: false });
+// Hero 右侧真地图：真实 Leaflet + 高德瓦片 + 定制苏州古城步行路径（浏览器专属，禁 SSR）
+const HeroTripMap = dynamic(() => import("./HeroTripMap"), { ssr: false });
+// Hero 示例数据：专为 Hero 定制的「苏州古城 · 一日漫步」步行环线
+import { HERO_DAY, KIND_COLOR, DEMO_LIST, haversineKm, type DemoTrip } from "./showcase-data";
 
 type GeoStatus = "idle" | "locating" | "ok" | "failed";
 
@@ -210,7 +216,7 @@ export default function Home() {
           style={{ background: heroGlow }}
           aria-hidden
         />
-        <div className="relative z-10 mx-auto grid max-w-6xl items-center gap-12 px-6 pb-28 pt-28 lg:grid-cols-[1.05fr_0.95fr] lg:pb-36 lg:pt-32">
+        <div className="relative z-10 mx-auto grid max-w-[88rem] items-center gap-12 px-6 pb-28 pt-28 lg:grid-cols-[0.85fr_1.3fr] lg:pb-36 lg:pt-32">
           <motion.div initial="hidden" animate="show">
             <motion.p
               variants={rise}
@@ -219,7 +225,7 @@ export default function Home() {
               style={{ color: "var(--aurora-teal)" }}
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              TRAVEL ATLAS · 8 位 AI 专家共创行程
+              8 个 AI 助手，一起帮你规划
             </motion.p>
             <motion.h1
               variants={rise}
@@ -228,7 +234,7 @@ export default function Home() {
             >
               一个应用，
               <br />
-              搞定你的
+              安排好你的
               <span className="relative whitespace-nowrap">
                 整趟旅行
                 {/* 手绘下划：极光琥珀，暗底上的一笔暖色 */}
@@ -260,8 +266,8 @@ export default function Home() {
               className="mt-7 max-w-md text-lg leading-relaxed"
               style={{ color: "var(--night-muted)" }}
             >
-              制定逐日行程、探索真实地点、把交通住宿预算都放进一屏——
-              8 位 AI 专家实时联网协作，全部在地图上可见、可拖拽微调。
+              告诉我们你想去哪，AI 会帮你排好每天的行程，
+              查好真实的车票、酒店和门票，标在地图上。哪里不合适，随时能改。
             </motion.p>
             <motion.div
               variants={rise}
@@ -285,14 +291,6 @@ export default function Home() {
                 我的行程
               </Link>
             </motion.div>
-            <motion.p
-              variants={rise}
-              custom={4}
-              className="mt-5 text-sm"
-              style={{ color: "var(--night-muted)" }}
-            >
-              免费开始 · 无需信用卡 · 数据真实可核验
-            </motion.p>
           </motion.div>
 
           {/* 产品预览：白色应用窗口浮在夜空上（进场 → 缓慢浮动 → 指针 3D 微倾，三层解耦互不打架） */}
@@ -327,8 +325,11 @@ export default function Home() {
         <div className="night-curve" aria-hidden />
       </section>
 
-      {/* ── 灵感灯箱：精选目的地图墙（点卡片即带入下方表单） ── */}
-      <section className="isolate relative overflow-hidden border-b border-line/60">
+      {/* ── 灵感灯箱：精选目的地图墙（点卡片即见完整可行方案） ── */}
+      <section
+        id="inspiration"
+        className="isolate relative scroll-mt-16 overflow-hidden border-b border-line/60"
+      >
         <div
           className="glow-spot glow-spot--amber -right-40 top-6 h-[26rem] w-[26rem]"
           aria-hidden
@@ -339,24 +340,23 @@ export default function Home() {
         />
         <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="ed-eyebrow justify-center">灵感灯箱 · 想去哪</span>
+            <span className="ed-eyebrow justify-center">热门目的地</span>
             <h2 className="font-serif mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              挑一个目的地，即刻启程
+              选一个目的地，看现成的行程
             </h2>
             <p className="mt-3 text-lg text-muted">
-              点开任意一站，目的地自动填入下方表单，8 位 AI 专家立刻为你排出逐日行程。
+              这里有六条从<b className="text-ink">无锡</b>出发的行程，车次、航班和门票都是真实的，可以照着走。点开就能看到每天的安排，喜欢的话，一键存到自己的行程里。
             </p>
           </div>
           <div className="mt-10 grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-3">
-            {DESTINATIONS.map((d, i) => (
+            {DEMO_LIST.map((d, i) => (
               <DestinationCard
                 key={d.slug}
                 d={d}
                 index={i}
-                onPick={(q) => {
-                  setDestination(q);
-                  logEvent("destination_pick_gallery", { name: q, via: "gallery" });
-                }}
+                onOpen={() =>
+                  logEvent("destination_open_demo", { slug: d.slug, via: "gallery" })
+                }
               />
             ))}
           </div>
@@ -376,13 +376,13 @@ export default function Home() {
         />
         <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="ed-eyebrow justify-center">行程与地图 · 一屏尽览</span>
+            <span className="ed-eyebrow justify-center">行程和地图</span>
             <h2 className="font-serif mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              左手逐日安排，右手同步地图
+              行程和地图，一起看
             </h2>
             <p className="mt-3 text-lg text-muted">
-              这不是效果图——下面是一份可以直接出发的「无锡 → 苏州」三日行程：
-              真实车次、真实门票、真实动线。切换天数或指向任意一站，地图随之聚焦。
+              下面是一份真实的「无锡 → 苏州」三日行程，车次、门票都能直接用。
+              切换天数，或把鼠标放到某一站上，地图就会跟着显示对应的位置。
             </p>
           </div>
           {/* 航线绘入：虚线路线随滚动画出，落点一枚定位针 */}
@@ -407,12 +407,12 @@ export default function Home() {
         />
         <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
           <div className="max-w-2xl">
-            <span className="ed-eyebrow">为什么是漫游</span>
+            <span className="ed-eyebrow">漫游能帮你做什么</span>
             <h2 className="font-serif mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              规划一趟旅行需要的一切，都在这里
+              规划旅行需要的，这里都有
             </h2>
             <p className="mt-3 text-lg text-muted">
-              orchestrator–worker 多智能体架构，专家分工、实时联网、彼此校验。
+              查路线、找酒店、排时间这些事，交给不同的 AI 分头去做，它们之间还会互相检查。
             </p>
           </div>
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -441,14 +441,14 @@ export default function Home() {
           {/* 8 位专家 chips：随滚动逐枚弹入，hover 点亮为主色 */}
           <div className="mt-8 flex flex-wrap gap-2">
             {[
-              "目的地调研",
-              "活动推荐",
-              "美食指南",
-              "住宿甄选",
-              "日程编排",
-              "交通接驳",
-              "综合行程",
-              "出行质检",
+              "找目的地",
+              "推荐活动",
+              "美食推荐",
+              "挑住宿",
+              "排日程",
+              "查交通",
+              "汇总行程",
+              "检查行程",
             ].map((f, i) => (
               <motion.span
                 key={f}
@@ -497,12 +497,12 @@ export default function Home() {
         />
         <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="ed-eyebrow justify-center">来自旅途</span>
+            <span className="ed-eyebrow justify-center">用户怎么说</span>
             <h2 className="font-serif mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              旅行者与研究者都在用
+              旅行者和研究者都在用
             </h2>
             <p className="mt-3 text-lg text-muted">
-              把规划这件复杂的事，交给可解释、可核验、可协作的 AI。
+              把麻烦的规划交给 AI，每一步你都看得懂、也能自己核对。
             </p>
           </div>
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -540,7 +540,7 @@ export default function Home() {
           {/* 技术栈徽章带 */}
           <div className="mt-12 flex flex-col items-center gap-3">
             <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-              由这些技术驱动
+              使用的技术
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               {["DeepSeek", "Supabase", "Leaflet", "Tavily", "Next.js", "OpenTelemetry"].map(
@@ -573,12 +573,12 @@ export default function Home() {
         />
         <div className="mx-auto max-w-2xl px-6 py-16">
           <div className="text-center">
-            <span className="ed-eyebrow justify-center">启程</span>
+            <span className="ed-eyebrow justify-center">开始</span>
             <h2 className="font-serif mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
-              开始规划你的旅程
+              开始规划你的旅行
             </h2>
             <p className="mt-2 text-muted">
-              填几个字段，剩下的交给 8 位 AI 专家。
+              填几项，剩下的交给 AI。
             </p>
           </div>
 
@@ -645,7 +645,7 @@ export default function Home() {
 
             <p className="text-xs text-muted">
               {now ? `当前时间：${now}（自动获取）` : "未能获取当前时间"}，
-              用于过滤已发车的班次；也可在下方手动指定出发/返程时间。
+              用来排除已经发车的班次。你也可以在下面自己填出发和返程时间。
             </p>
 
             <div className="grid grid-cols-2 gap-4">
@@ -689,7 +689,7 @@ export default function Home() {
             <Field label="旅行风格">
               <input
                 name="travel_style"
-                placeholder="如：美食 + 文化，节奏轻松"
+                placeholder="比如：想多吃美食，节奏慢一点"
                 className={inputCls}
               />
             </Field>
@@ -787,32 +787,32 @@ function RouteFlourish() {
 }
 
 const STATS: { value: string; label: string }[] = [
-  { value: "8", label: "位专家 AI 协作" },
-  { value: "6", label: "波并行编排" },
-  { value: "100%", label: "数据附来源核验" },
-  { value: "1 屏", label: "行程 + 地图同步" },
+  { value: "8", label: "个 AI 助手" },
+  { value: "6", label: "个环节同时进行" },
+  { value: "100%", label: "信息都带来源" },
+  { value: "1 屏", label: "看完整趟行程" },
 ];
 
 const TESTIMONIALS: { name: string; role: string; quote: string; color: string }[] = [
   {
     name: "林 Wei",
-    role: "自由行玩家",
+    role: "自由行爱好者",
     quote:
-      "以前排一趟五日游要开十几个标签页，现在几分钟就出一版逐日行程，车次和酒店还都带真实链接，直接就能订。",
+      "以前订一趟五天的行程，要开十几个网页来回比。现在几分钟就排好了，车次和酒店都带链接，点开就能订。",
     color: "#0f8b8b",
   },
   {
     name: "Zoe",
-    role: "HCI 研究者",
+    role: "人机交互研究者",
     quote:
-      "最难得的是过程可见——每个 agent 选了谁、依据什么来源都摊开给你看，改动还能先预览再决定，信任是建立在证据上的。",
+      "我最喜欢的是它把过程都摆出来：每个选择用了哪些资料都写得很清楚，想改的地方还能先看效果再决定。",
     color: "#5b6abf",
   },
   {
     name: "老陈",
     role: "带娃出行的爸爸",
     quote:
-      "节奏滑块一拉就把每天排松，天气打包清单也自动生成。全家出门再也不用我一个人熬夜做攻略了。",
+      "拉一下就能把每天的安排排松一点，还会自动列好要带的东西。全家出门，我不用再一个人熬夜查攻略了。",
     color: "#d97742",
   },
 ];
@@ -820,105 +820,49 @@ const TESTIMONIALS: { name: string; role: string; quote: string; color: string }
 const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
   {
     icon: MapIcon,
-    title: "地图上的行程",
-    desc: "每个景点、餐厅、酒店都落在交互地图上，逐日路线一目了然。",
+    title: "行程都在地图上",
+    desc: "每个景点、餐厅和酒店都会标在地图上，每天走的路线看得很清楚。",
   },
   {
     icon: Bot,
-    title: "8 位 AI 专家协作",
-    desc: "调研、活动、美食、住宿、日程、交通、综合、质检，分工又互相校验。",
+    title: "8 个 AI 一起规划",
+    desc: "找地方、选活动、订餐、订住宿、排时间、查交通，各管一摊，最后一起核对。",
   },
   {
     icon: Link2,
-    title: "真实数据，可核验",
-    desc: "车次、航班、酒店实时联网检索，附来源与官方预订深链，绝不编造。",
+    title: "信息都是真的",
+    desc: "车次、航班和酒店都是实时查来的，附上来源和官方订购链接，不会瞎编。",
   },
   {
     icon: GripVertical,
-    title: "拖拽即改",
-    desc: "条目可拖拽排序、直接改内容，也能和对话助手共同微调行程。",
+    title: "随时能改",
+    desc: "每一项都能拖动排序、直接修改，也可以让 AI 助手帮你一起调整。",
   },
   {
     icon: Wallet,
-    title: "预算随时可见",
-    desc: "按类别、按天实时汇总花费，和预算对照，超支立刻提醒。",
+    title: "花了多少一直看得到",
+    desc: "按类别和每天自动算好花费，跟预算一比，超了会提醒你。",
   },
   {
     icon: Luggage,
-    title: "天气与打包",
-    desc: "按目的地天气与活动智能生成打包清单，出发前一项不落。",
+    title: "天气和行李清单",
+    desc: "根据当地天气和你的安排，帮你列好要带的东西，出发前不漏项。",
   },
 ];
 
-/** 精选目的地：图墙数据。slug 对应 public/destinations/<slug>.jpg（见该目录 README 的生成提示词）。
- *  query 为点卡片后带入「目的地」表单的字段；featured 卡片右上角盖「AI 精选」印章。 */
-type Destination = {
-  slug: string;
-  name: string;
-  en: string;
-  tagline: string;
-  query: string;
-  featured?: boolean;
-};
-
-const DESTINATIONS: Destination[] = [
-  {
-    slug: "suzhou",
-    name: "苏州",
-    en: "SUZHOU",
-    tagline: "园林深处，枕河人家",
-    query: "苏州",
-    featured: true,
-  },
-  {
-    slug: "kyoto",
-    name: "京都",
-    en: "KYOTO",
-    tagline: "千年古都，红叶千鸟居",
-    query: "京都",
-  },
-  {
-    slug: "yading",
-    name: "稻城亚丁",
-    en: "YADING",
-    tagline: "雪山圣湖，蓝色星球的净土",
-    query: "稻城亚丁",
-  },
-  {
-    slug: "iceland",
-    name: "冰岛",
-    en: "ICELAND",
-    tagline: "极光旷野，冰与火之地",
-    query: "冰岛",
-    featured: true,
-  },
-  {
-    slug: "santorini",
-    name: "圣托里尼",
-    en: "SANTORINI",
-    tagline: "爱琴海落日，蓝白之城",
-    query: "圣托里尼",
-  },
-  {
-    slug: "morocco",
-    name: "摩洛哥",
-    en: "MOROCCO",
-    tagline: "撒哈拉沙丘，暖色秘境",
-    query: "摩洛哥",
-  },
-];
-
-/** 目的地卡：竖幅实景照 + 底部渐深遮罩 + 衬线地名；hover 抬升并浮出「规划这里」。
- *  照片缺失（尚未生成）时降级为青瓷→琥珀柔和渐变占位，绝不裂图。 */
+/** 目的地卡：竖幅实景照 + 底部渐深遮罩 + 衬线地名；hover 抬升并浮出「查看方案」。
+ *  点开即跳 /demo/<slug> 完整行程页；照片缺失（尚未生成）时降级为柔和渐变占位，绝不裂图。
+ *  数据来自 app/showcase-data 的 DEMOS（单一事实来源），slug 对应 public/destinations/<slug>.jpg。 */
 function DestinationCard({
   d,
   index,
-  onPick,
+  onOpen,
 }: {
-  d: Destination;
+  d: DemoTrip;
   index: number;
-  onPick: (query: string) => void;
+  onOpen: () => void;
 }) {
+  const TransportIcon = d.transport === "flight" ? Plane : TrainFront;
   const [imgOk, setImgOk] = useState(true);
   // 指针 3D 微倾：光标位置 → 卡片朝光标翘起（弹簧回中），比纯 CSS 更有实体感
   const reduce = useReducedMotion();
@@ -944,8 +888,8 @@ function DestinationCard({
   }
   return (
     <motion.a
-      href="#plan"
-      onClick={() => onPick(d.query)}
+      href={`/demo/${d.slug}`}
+      onClick={onOpen}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
       initial={{ opacity: 0, y: 16 }}
@@ -954,7 +898,7 @@ function DestinationCard({
       transition={{ delay: 0.05 * (index % 3), duration: 0.45 }}
       style={{ rotateX: rx, rotateY: ry, transformPerspective: 800 }}
       className="group relative block overflow-hidden rounded-card border border-line bg-surface-2 shadow-soft transition-[box-shadow,border-color] duration-300 hover:border-teal/45 hover:shadow-lift"
-      aria-label={`规划前往${d.name}的行程`}
+      aria-label={`查看${d.origin}→${d.name}的完整行程方案`}
     >
       <div className="relative aspect-[4/5] w-full overflow-hidden">
         {imgOk ? (
@@ -1006,6 +950,10 @@ function DestinationCard({
               {d.name}
             </h3>
             <p className="mt-1 text-xs leading-snug text-white/85">{d.tagline}</p>
+            <span className="mt-2 inline-flex items-center gap-1 rounded-pill bg-white/15 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur">
+              <TransportIcon className="h-2.5 w-2.5" aria-hidden />
+              {d.durationLabel} · {d.budgetLabel}
+            </span>
           </div>
           {/* 常驻圆形箭头：明确「点即规划」，hover 时填青瓷并右移 */}
           <span
@@ -1020,14 +968,22 @@ function DestinationCard({
   );
 }
 
-/** 产品预览窗口：左行程列表 + 右迷你地图（呼应「行程+地图」双栏视图）。 */
+/**
+ * 产品预览窗口：左「苏州古城一日漫步 · 逐站卡片」+ 右「真·Leaflet 地图上的步行路径」。
+ * 数据取自 showcase-data 的 HERO_DAY（Hero 专属定制示例）：左侧卡片序号与右侧地图编号
+ * 针脚一一对应、hover 双向联动；右侧是真实高德底图 + 真实步行动线（HeroTripMap）。
+ * 地图只开 +/- 缩放、关拖拽/滚轮——见 HeroTripMap，避让 hero 的 3D 悬浮/视差。
+ */
 function HeroMock() {
-  const rows = [
-    { n: 1, c: "var(--c-transit)", title: "G7215 · 无锡 → 苏州", meta: "09:04 · 20 分钟直达" },
-    { n: 2, c: "var(--c-activity)", title: "拙政园", meta: "10:40 · ¥80" },
-    { n: 3, c: "var(--c-activity)", title: "苏州博物馆", meta: "14:00 · 免费预约" },
-    { n: 4, c: "var(--c-activity)", title: "平江路 · 摇橹船夜游", meta: "18:30 · ¥55" },
-  ];
+  const day = HERO_DAY;
+  const stops = day.stops;
+  const [hover, setHover] = useState<number | null>(null);
+  const reduce = useReducedMotion();
+
+  // 步行动线总里程（真实球面距离）
+  let walkKm = 0;
+  for (let i = 1; i < stops.length; i++) walkKm += haversineKm(stops[i - 1], stops[i]);
+
   return (
     <div className="overflow-hidden rounded-card border border-line bg-surface shadow-lift">
       {/* 窗口顶栏 */}
@@ -1036,83 +992,93 @@ function HeroMock() {
         <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
         <span className="h-3 w-3 rounded-full bg-[#28c840]" />
         <span className="font-data ml-3 rounded-pill border border-line bg-surface px-3 py-1 text-xs font-medium text-muted">
-          无锡 → 苏州 · 江南三日
+          苏州古城 · 一日游
         </span>
       </div>
-      <div className="grid sm:grid-cols-[1fr_0.85fr]">
-        {/* 左：行程列表 */}
+      <div className="grid sm:grid-cols-[0.92fr_1.08fr]">
+        {/* 左：定制行程逐站卡片（序号 ↔ 右侧针脚，hover 联动） */}
         <div className="p-5">
-          <p className="ed-eyebrow">周五 · Day 1</p>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="ed-eyebrow">{day.dow} · 步行路线</p>
+            <p className="font-data text-[10px] text-muted">{day.summary}</p>
+          </div>
           <h3 className="font-serif mt-1 text-base font-bold text-ink">
-            入城 · 拙政园与平江夜色
+            一天六个景点
           </h3>
-          <ul className="mt-3 space-y-2">
-            {rows.map((r) => (
-              <li
-                key={r.n}
-                className="flex items-start gap-2.5 rounded-lg border border-line bg-surface p-2.5"
-              >
-                <span
-                  className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold text-white"
-                  style={{ background: r.c }}
+          <ul className="mt-3 space-y-1.5">
+            {stops.map((s, i) => {
+              const hot = hover === i;
+              return (
+                <li
+                  key={i}
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}
+                  className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 transition ${
+                    hot
+                      ? "border-line-strong bg-surface-2 shadow-soft"
+                      : "border-line bg-surface"
+                  }`}
                 >
-                  {r.n}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-ink">
-                    {r.title}
-                  </p>
-                  <p className="font-data text-[11px] text-muted">{r.meta}</p>
-                </div>
-              </li>
-            ))}
+                  <span
+                    className="sc-node shrink-0 transition-transform"
+                    style={
+                      {
+                        "--c": KIND_COLOR[s.kind],
+                        transform: hot ? "scale(1.12)" : undefined,
+                      } as React.CSSProperties
+                    }
+                  >
+                    <span className="text-[13px] font-bold leading-none">
+                      {i + 1}
+                    </span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold leading-tight text-ink">
+                      {s.title}
+                    </p>
+                    {s.detail && (
+                      <p className="truncate text-[11px] leading-tight text-muted">
+                        {s.detail}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right leading-tight">
+                    <p className="font-data text-[11px] font-semibold text-ink">
+                      {s.time}
+                    </p>
+                    <p className="font-data text-[10px] text-muted">
+                      {s.cost ?? "免费"}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
+          <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5">
+            <span className="font-data text-[10px] text-muted">
+              {stops.length} 站 · 步行 ≈ {walkKm.toFixed(1)} km
+            </span>
+            <span className="font-data text-[10px] font-semibold text-teal-dark">
+              真实地图 · 可放大
+            </span>
+          </div>
         </div>
-        {/* 右：迷你地图 */}
-        <div
-          className="relative hidden min-h-[260px] border-l border-line sm:block"
-          style={{
-            background:
-              "linear-gradient(135deg,#eef4f2,#e7eef3), radial-gradient(circle at 30% 40%, rgba(15,139,139,.08), transparent 60%)",
-          }}
-        >
-          {/* 路线绘入动效 */}
-          <svg className="absolute inset-0 h-full w-full" aria-hidden>
-            <motion.polyline
-              points="60,60 120,110 90,180 150,220"
-              fill="none"
-              stroke="var(--teal)"
-              strokeWidth="2"
-              strokeDasharray="1 8"
-              strokeLinecap="round"
-              opacity="0.7"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ delay: 0.7, duration: 1.2, ease: "easeInOut" }}
-            />
-          </svg>
-          {[
-            { n: 1, x: 60, y: 60, c: "var(--c-transit)" },
-            { n: 2, x: 120, y: 110, c: "var(--c-activity)" },
-            { n: 3, x: 90, y: 180, c: "var(--c-activity)" },
-            { n: 4, x: 150, y: 220, c: "var(--c-activity)" },
-          ].map((p, i) => (
-            <motion.span
-              key={p.n}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8 + i * 0.22, type: "spring", stiffness: 400, damping: 22 }}
-              className="absolute grid h-6 w-6 -translate-x-1/2 -translate-y-full place-items-center rounded-full text-[11px] font-bold text-white shadow-md"
-              style={{
-                left: p.x,
-                top: p.y,
-                background: p.c,
-                borderRadius: "50% 50% 50% 0",
-              }}
-            >
-              <span style={{ transform: "rotate(0)" }}>{p.n}</span>
-            </motion.span>
-          ))}
+
+        {/* 右：真·Leaflet 地图上的步行路径（真实高德底图 + 编号针脚 + hover 联动） */}
+        <div className="relative hidden min-h-[440px] border-l border-line bg-[#eef1ee] sm:block">
+          <HeroTripMap
+            stops={stops}
+            hover={hover}
+            onHover={setHover}
+            reduced={!!reduce}
+          />
+          {/* 地图角注 */}
+          <div className="pointer-events-none absolute bottom-2 left-2.5 z-[1000] flex items-center gap-1 rounded-pill bg-white/85 px-2 py-0.5 shadow-soft backdrop-blur">
+            <MapPin className="h-3 w-3 text-teal" aria-hidden />
+            <span className="font-data text-[10px] font-medium text-muted">
+              苏州古城 · 步行路线
+            </span>
+          </div>
         </div>
       </div>
     </div>

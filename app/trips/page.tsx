@@ -52,11 +52,11 @@ export default async function TripsPage() {
       />
       <div className="flex items-center justify-between">
         <div>
-          <span className="ed-eyebrow">旅行档案</span>
+          <span className="ed-eyebrow">全部行程</span>
           <h1 className="font-serif mt-2 text-3xl font-bold tracking-tight text-ink">
             我的行程
           </h1>
-          <p className="mt-1 text-sm text-muted">共 {trips.length} 趟旅程</p>
+          <p className="mt-1 text-sm text-muted">共 {trips.length} 趟</p>
         </div>
         <Link
           href="/"
@@ -78,7 +78,7 @@ export default async function TripsPage() {
           <Empty
             art="luggage"
             title="还没有行程"
-            hint="从这里开始你的第一趟旅程——填几个字段，8 位 AI 专家帮你排好每一天。也可以先载入一份真实示例，把拖拽、预算、打包、地图都玩一遍。"
+            hint="填几项，AI 就能帮你排好每一天。也可以先载入一份真实的示例行程，试试拖动、预算、打包和地图怎么用。"
             action={
               <span className="flex flex-wrap items-center justify-center gap-3">
                 <Link
@@ -106,7 +106,7 @@ export default async function TripsPage() {
               <Plus className="h-5 w-5" aria-hidden />
             </span>
             <p className="mt-3 text-sm font-semibold text-ink">规划新行程</p>
-            <p className="mt-0.5 text-xs text-muted">几分钟排好逐日安排</p>
+            <p className="mt-0.5 text-xs text-muted">几分钟排好每天的安排</p>
           </Link>
 
           {trips.map((t) => {

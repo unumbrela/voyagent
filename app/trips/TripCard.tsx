@@ -123,7 +123,7 @@ export function TripCard({
         onClose={() => setConfirming(false)}
         onConfirm={onDelete}
         title={`删除「${destination}」？`}
-        body="行程、规划过程与打包清单都会一并删除，且无法恢复。"
+        body="这趟行程、规划过程和打包清单都会一起删掉，删了就找不回来了。"
         confirmText="删除"
         danger
         loading={deleting}
