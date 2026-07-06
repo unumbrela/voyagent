@@ -1,7 +1,7 @@
 import { DEEPSEEK } from "@/lib/deepseek";
 import { runAgent } from "./runAgent";
 import { transportSchema } from "./schemas";
-import { contextBlock, upstreamBlock } from "./prompt";
+import { contextBlock } from "./prompt";
 import { railBookingUrl } from "@/lib/stations";
 import { flightBookingUrl } from "@/lib/airports";
 import { guardUrls } from "@/lib/guardrails";
@@ -97,7 +97,7 @@ async function applyBookingLinks(
   }
 }
 
-/** Transport：交通物流（依赖已排好的日程，DeepSeek + 自建 web 搜索） */
+/** Transport：交通物流（只依赖 context 的出发地/目的地/日期，第 1 波并行；DeepSeek + 自建 web 搜索） */
 export async function runTransport(ctx: AgentContext) {
   const payload = await runAgent<TransportPayload>({
     provider: "deepseek",
@@ -111,8 +111,10 @@ export async function runTransport(ctx: AgentContext) {
       "工作流程：\n" +
       "1) 判断出发地↔目的地是否通铁路：国内（含港澳台跨境除外）优先查【高铁/动车】，" +
       "跨国或无直达铁路则查【航班】；两者都合理时各给一组。\n" +
-      "2) 必须真的调用 web_search 多次：分别搜去程、返程的真实车次/航班与当日时刻、票价区间" +
-      "（查询词带上出发地、目的地、日期、『高铁 时刻表 票价』或『航班』）。\n" +
+      "2) 必须真的调用 web_search：分别搜去程、返程的真实车次/航班与当日时刻、票价区间" +
+      "（查询词带上出发地、目的地、日期、『高铁 时刻表 票价』或『航班』）。" +
+      "为了省时间，把去程、返程等多个搜索放在【同一轮一次性并行发出】（一次回复带多个工具调用），" +
+      "不要一轮只搜一个再等结果。\n" +
       "3) outbound/inbound 各给 2~4 个真实存在的班次（options）：填车次/航班号、出发到达站与时间、" +
       "时长、票价区间，并且每条都要带 source_url（搜索来源）和 booking_url（官方购票：" +
       "铁路用 https://www.12306.cn ，机票用航司官网或携程/去哪儿）。\n" +
@@ -123,13 +125,11 @@ export async function runTransport(ctx: AgentContext) {
       "- 去程：若出发日期 = 当前时间所在的当天，则所有去程 options 的出发时间必须【晚于当前时间】" +
       "（已发车的一律不许推荐）；若还指定了『去程最早出发时间』，则须不早于该时间。出发日为将来日期则不受当前时间限制。\n" +
       "- 返程：所有返程 options 的【到达出发地时间】必须【早于『返程最晚到达时间』】（若指定）；" +
-      "同时出发时间要晚于尾日最后一个活动并留足赶站缓冲。\n" +
+      "返程班次别选太早的——尾日下午还要游玩，优先傍晚前后出发、并留足从市区赶站的缓冲。\n" +
       "- options 数组中【不得出现】任何违反上述时间约束的班次；可在 recommended 文字里提及备选，但 options 只放合规的。\n" +
       "- 在 recommended 里点明你是如何满足这些时间约束的。\n" +
       "若出发地未填，outbound/inbound 的 options 可为空并在 recommended 说明。只输出结构化 JSON。",
-    userPrompt:
-      `行程参数：\n${contextBlock(ctx.context)}\n\n` +
-      upstreamBlock(ctx, ["scheduling"]),
+    userPrompt: `行程参数：\n${contextBlock(ctx.context)}`,
   });
   // 硬保证：再用代码剔除越界班次，不依赖模型自觉
   enforceTimeWindows(payload, ctx.context);

@@ -34,11 +34,11 @@ const META: { agent: AgentName; label: string; wave: number; what: string }[] = 
   { agent: "enrichment", label: "了解目的地", wave: 1, what: "了解目的地的基本情况：季节、货币、语言、安全和本地小贴士" },
   { agent: "activities", label: "推荐活动", wave: 1, what: "上网找真实的景点和活动，并说明为什么推荐" },
   { agent: "food", label: "推荐美食", wave: 1, what: "整理当地的餐厅（菜系、区域、价位）" },
+  { agent: "transport", label: "安排交通", wave: 1, what: "上网找真实的去程和返程班次（带来源和购票链接）" },
   { agent: "accommodation", label: "推荐住宿", wave: 2, what: "根据活动分布挑住的区域，上网找真实住宿（带来源和预订链接）" },
-  { agent: "scheduling", label: "安排日程", wave: 3, what: "以住宿为中心，把这些地方排成每天的大致路线" },
-  { agent: "transport", label: "安排交通", wave: 4, what: "上网找真实的去程和返程班次（带来源和购票链接）" },
-  { agent: "hub_planner", label: "汇总行程", wave: 5, what: "把前面的结果汇总成每天的完整行程" },
-  { agent: "validator", label: "检查行程", wave: 6, what: "在出发前检查整份行程，挑出问题" },
+  { agent: "scheduling", label: "安排日程", wave: 3, what: "以住宿为中心、以真实班次为锚，把这些地方排成每天的大致路线" },
+  { agent: "hub_planner", label: "汇总行程", wave: 4, what: "把前面的结果汇总成每天的完整行程" },
+  { agent: "validator", label: "检查行程", wave: 5, what: "在出发前检查整份行程，挑出问题" },
 ];
 
 const s = (v: unknown): string => (typeof v === "string" ? v.trim() : "");

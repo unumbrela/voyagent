@@ -40,7 +40,7 @@ export interface DeepSeekJSONOpts {
   onToolCall?: (name: string, argsJson: string) => Promise<string>;
 }
 
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 4;
 
 export async function callDeepSeekJSON<T = unknown>(
   opts: DeepSeekJSONOpts,
@@ -118,13 +118,19 @@ export async function callDeepSeekJSON<T = unknown>(
           content: msg.content ?? "",
           tool_calls: msg.tool_calls,
         });
-        for (const tc of msg.tool_calls) {
-          const result = await opts.onToolCall(
-            tc.function.name,
-            tc.function.arguments,
-          );
-          messages.push({ role: "tool", tool_call_id: tc.id, content: result });
-        }
+        // 同轮多个工具调用并行执行（web 搜索互相独立），按原顺序回填结果
+        const results = await Promise.all(
+          msg.tool_calls.map((tc) =>
+            opts.onToolCall!(tc.function.name, tc.function.arguments),
+          ),
+        );
+        msg.tool_calls.forEach((tc, i) => {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: results[i],
+          });
+        });
         continue;
       }
       // 模型不再调工具：留下它这轮的草稿作上下文，进入收口阶段

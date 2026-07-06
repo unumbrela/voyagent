@@ -93,11 +93,11 @@ const AGENTS: { key: string; label: string; wave: number; search?: boolean }[] =
   { key: "enrichment", label: "了解目的地", wave: 1 },
   { key: "activities", label: "推荐活动", wave: 1, search: true },
   { key: "food", label: "推荐美食", wave: 1 },
+  { key: "transport", label: "安排交通", wave: 1, search: true },
   { key: "accommodation", label: "推荐住宿", wave: 2, search: true },
   { key: "scheduling", label: "安排日程", wave: 3 },
-  { key: "transport", label: "安排交通", wave: 4, search: true },
-  { key: "hub_planner", label: "汇总行程", wave: 5 },
-  { key: "validator", label: "检查行程", wave: 6 },
+  { key: "hub_planner", label: "汇总行程", wave: 4 },
+  { key: "validator", label: "检查行程", wave: 5 },
 ];
 
 const KINDS = ["activity", "food", "rest", "transit"];

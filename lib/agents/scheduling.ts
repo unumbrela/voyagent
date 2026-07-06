@@ -19,10 +19,19 @@ export function runScheduling(ctx: AgentContext) {
       "【首日顺序铁律】：首日的**第一个** transit 块必须是【从出发地出发的去程】" +
       "（写明 出发地→目的地、交通方式，这是全程第一项；若出发地未填可省略）；" +
       "**抵达目的地之后**再单独一个 transit/rest 块为【抵达＋入住酒店】（写明酒店）——" +
-      "切勿把入住排在出发之前。尾日最后一个 transit 块为离店/返程。" +
+      "切勿把入住排在出发之前。尾日最后一个 transit 块为离店/返程。\n" +
+      "【以真实班次为锚】：上游 transport 给了真实的去程/返程推荐班次时刻，" +
+      "首日活动从去程【到达时刻之后】才开始排，尾日活动在返程【出发时刻前留足赶站缓冲】结束；" +
+      "别排出人还没到就开玩、或玩到赶不上返程的日程。" +
       "每天给主题，时段块标注 activity/food/rest/transit。只输出结构化 JSON。",
     userPrompt:
       `行程参数：\n${contextBlock(ctx.context)}\n\n` +
-      upstreamBlock(ctx, ["enrichment", "activities", "food", "accommodation"]),
+      upstreamBlock(ctx, [
+        "enrichment",
+        "activities",
+        "food",
+        "accommodation",
+        "transport",
+      ]),
   });
 }

@@ -35,23 +35,31 @@ export async function webSearch(
   const key = process.env.TAVILY_API_KEY;
   if (!key) return [];
 
-  const res = await fetch(TAVILY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: key,
-      query,
-      max_results: maxResults,
-      search_depth: includeRaw ? "advanced" : "basic",
-      include_raw_content: includeRaw,
-      ...(includeDomains?.length ? { include_domains: includeDomains } : {}),
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Tavily API ${res.status}: ${text}`);
+  // 多个搜索型 agent 现在同波并行（activities/transport 同时开搜），限流概率上升：
+  // 429/5xx 退避重试两次，别让一次限流拖垮整个 agent（agent 级重试会整体重跑，更贵）
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(TAVILY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: key,
+        query,
+        max_results: maxResults,
+        search_depth: includeRaw ? "advanced" : "basic",
+        include_raw_content: includeRaw,
+        ...(includeDomains?.length ? { include_domains: includeDomains } : {}),
+      }),
+    });
+    if (res.ok || (res.status !== 429 && res.status < 500) || attempt === 2) break;
+    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
   }
+
+  if (!res!.ok) {
+    const text = await res!.text();
+    throw new Error(`Tavily API ${res!.status}: ${text}`);
+  }
+  res = res!;
 
   const data = (await res.json()) as {
     results?: {
