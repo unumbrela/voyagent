@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
 
 # vercel
 .vercel
@@ -42,6 +43,14 @@ next-env.d.ts
 
 # local screenshot, not for repo
 /截图.jpg
+
+# 课程作业产物（报告/PPT/提交压缩包），本地保留、不入库
+/*.docx
+/*.pptx
+/*.zip
+
+# Claude Code 本地工作文件
+.claude/
 
 # 数字人循环视频的原始素材（大文件，本地保留、不入库；处理后的 *-loop.mp4 才提交）
 public/avatar/xiaoxing/_raw/*.mp4
