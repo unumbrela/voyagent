@@ -31,6 +31,14 @@ import { amapGeocodePois, hasAmapKey } from "./amap-kit";
 import TripMapLeaflet from "./TripMapLeaflet";
 import TripMapAMap from "./TripMapAMap";
 
+// ⚠️ 高德渲染引擎默认关闭——与首页 ShowcaseTrip 的 ENABLE_AMAP_3D=false 同一决策。
+// 实测本机环境高德 JSAPI 连 2D 模式也只建出「空白 canvas」：canvas 存在导致
+// 就绪轮询误判、不触发自动回落，用户看到整片空白。空白 canvas 无法从外部检测
+// （跨域瓦片污染读不了像素），所以干脆默认只用可靠的 Leaflet（渲染同一套高德
+// 中文瓦片，观感与首页地图一致）。PlaceSearch 地理编码不受影响（纯 HTTP，不渲染）。
+// 待高德渲染确认可稳定出图后，置 true 即恢复双引擎。
+const ENABLE_AMAP_ENGINE = false;
+
 // 本会话内高德引擎是否已确认不可用（加载/渲染失败后不再反复尝试）
 let amapBrokenSession = false;
 
@@ -262,10 +270,17 @@ export default function TripMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
-  // ── 引擎选择：国内 + 有 key + 未确认失败 → 高德；用户手动偏好优先 ──
-  const amapEligible = domestic === true && hasAmapKey && !amapBrokenSession;
-  const engine: "amap" | "leaflet" | null =
-    domestic === null ? null : amapEligible && enginePref !== "leaflet" ? "amap" : "leaflet";
+  // ── 引擎选择：显式开启 + 国内 + 有 key + 未确认失败 → 高德；用户手动偏好优先 ──
+  const amapEligible =
+    ENABLE_AMAP_ENGINE && domestic === true && hasAmapKey && !amapBrokenSession;
+  // 引擎关闭时无须等国内判定，Leaflet 直接出图（地理编码照常异步补点）
+  const engine: "amap" | "leaflet" | null = !ENABLE_AMAP_ENGINE
+    ? "leaflet"
+    : domestic === null
+      ? null
+      : amapEligible && enginePref !== "leaflet"
+        ? "amap"
+        : "leaflet";
 
   function setPref(v: "amap" | "leaflet") {
     try {
