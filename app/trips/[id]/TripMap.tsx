@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { isInChina } from "@/lib/gcj02";
+import { isInChina, wgs84ToGcj02 } from "@/lib/gcj02";
 import { Map as MapIcon } from "@/app/ui/icons";
 import {
   colorOf,
@@ -171,7 +171,6 @@ export default function TripMap({
           originPt = base.originPoint;
           isDomestic = !!centerPt && isInChina(centerPt.lat, centerPt.lon);
           if (isDomestic) {
-            const { wgs84ToGcj02 } = await import("@/lib/gcj02");
             const cGcj = centerPt
               ? wgs84ToGcj02(centerPt.lat, centerPt.lon)
               : null;
@@ -408,9 +407,9 @@ export default function TripMap({
             type="button"
             onClick={() => setPref("leaflet")}
             className="absolute bottom-3 right-3 z-10 rounded-full border border-line bg-white/90 px-2.5 py-1 text-[11px] text-muted shadow-soft backdrop-blur-sm hover:border-line-strong hover:text-ink"
-            title="地图显示不正常？切回稳定的 2D 底图"
+            title="地图显示不正常？切换到备用底图"
           >
-            2D 底图
+            备用地图
           </button>
         )}
         {engine === "leaflet" && amapEligible && (
@@ -418,9 +417,9 @@ export default function TripMap({
             type="button"
             onClick={() => setPref("amap")}
             className="absolute bottom-3 right-3 z-10 rounded-full border border-line bg-white/90 px-2.5 py-1 text-[11px] text-muted shadow-soft backdrop-blur-sm hover:border-line-strong hover:text-ink"
-            title="切换为高德 3D 斜俯视"
+            title="切换为高德地图引擎"
           >
-            高德 3D
+            高德地图
           </button>
         )}
 

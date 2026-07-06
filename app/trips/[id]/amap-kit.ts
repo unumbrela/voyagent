@@ -73,16 +73,24 @@ interface AmapPlaceSearch {
 
 let nsPromise: Promise<AmapNs> | null = null;
 
-/** 单例加载 JSAPI 2.0（含 PlaceSearch 插件）；失败清空缓存以便下次重试 */
+/**
+ * 单例加载 JSAPI 2.0（含 PlaceSearch 插件）；失败清空缓存以便下次重试。
+ * 带 10s 超时：实测脚本加载偶发「挂起」（不成功也不报错），若不设超时，
+ * 调用方 await 永不返回——地图 spinner 卡死且回落逻辑无从触发。
+ */
 export function loadAmap(): Promise<AmapNs> {
   if (!KEY) return Promise.reject(new Error("未配置 NEXT_PUBLIC_AMAP_KEY"));
   if (!nsPromise) {
     if (SECURITY) window._AMapSecurityConfig = { securityJsCode: SECURITY };
-    nsPromise = AMapLoader.load({
+    const load = AMapLoader.load({
       key: KEY,
       version: "2.0",
       plugins: ["AMap.PlaceSearch"],
     }) as Promise<AmapNs>;
+    const timeout = new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error("高德 JSAPI 加载超时")), 10000);
+    });
+    nsPromise = Promise.race([load, timeout]);
     nsPromise.catch(() => {
       nsPromise = null;
     });
@@ -92,27 +100,67 @@ export function loadAmap(): Promise<AmapNs> {
 
 // ── PlaceSearch 批量地理编码 ──
 
-// 进程级缓存：目的地|地点名 → Pt | null（编辑行程重画近乎零成本）
+// 缓存：目的地|地点名 → Pt | null。localStorage 持久化——个人 key 的搜索服务
+// 有每日配额，同一行程反复打开/编辑不该重复烧配额；null（查不到）也缓存。
+const CACHE_LS_KEY = "amap-poi-cache-v1";
+const CACHE_CAP = 600;
 const poiCache = new Map<string, Pt | null>();
+let cacheLoaded = false;
 
-/** 单次 PlaceSearch（带超时）；status=error 重试一次（个人 key 有 QPS 限制） */
+function loadCache() {
+  if (cacheLoaded) return;
+  cacheLoaded = true;
+  try {
+    const raw = window.localStorage.getItem(CACHE_LS_KEY);
+    if (!raw) return;
+    for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, Pt | null>)) {
+      poiCache.set(k, v);
+    }
+  } catch {
+    /* 解析失败当无缓存 */
+  }
+}
+
+function saveCache() {
+  try {
+    // 超容量时丢最早写入的一半（Map 迭代按插入序）
+    while (poiCache.size > CACHE_CAP) {
+      const first = poiCache.keys().next().value;
+      if (first === undefined) break;
+      poiCache.delete(first);
+    }
+    window.localStorage.setItem(
+      CACHE_LS_KEY,
+      JSON.stringify(Object.fromEntries(poiCache)),
+    );
+  } catch {
+    /* 隐私模式/超限忽略 */
+  }
+}
+
+/**
+ * 单次 PlaceSearch（带超时）。
+ * transient=true 表示临时失败（超时/QPS/配额 error）——这类 miss 不得持久缓存，
+ * 否则配额恢复后地点仍被永久标成「查不到」；no_data/空结果才是确定查无。
+ */
 function searchOnce(
   ps: AmapPlaceSearch,
   keyword: string,
   timeoutMs = 8000,
-): Promise<Pt | null> {
+): Promise<{ pt: Pt | null; transient: boolean }> {
   return new Promise((resolve) => {
     let done = false;
-    const finish = (v: Pt | null) => {
+    const finish = (pt: Pt | null, transient: boolean) => {
       if (!done) {
         done = true;
-        resolve(v);
+        resolve({ pt, transient });
       }
     };
-    const timer = window.setTimeout(() => finish(null), timeoutMs);
+    const timer = window.setTimeout(() => finish(null, true), timeoutMs);
     ps.search(keyword, (status, result) => {
       window.clearTimeout(timer);
-      if (status !== "complete") return finish(null);
+      if (status === "error") return finish(null, true);
+      if (status !== "complete") return finish(null, false); // no_data = 确定查无
       const pois = (
         result as {
           poiList?: {
@@ -123,8 +171,9 @@ function searchOnce(
       const p = pois?.[0];
       const lng = p?.location?.lng;
       const lat = p?.location?.lat;
-      if (typeof lng !== "number" || typeof lat !== "number") return finish(null);
-      finish({ lat, lon: lng, label: p?.name || keyword, sys: "gcj" });
+      if (typeof lng !== "number" || typeof lat !== "number")
+        return finish(null, false);
+      finish({ lat, lon: lng, label: p?.name || keyword, sys: "gcj" }, false);
     });
   });
 }
@@ -174,12 +223,21 @@ export async function amapGeocodePois(
   const out: Record<string, Pt | null> = {};
   const uniq = Array.from(new Set(queries.map((q) => q.trim()).filter(Boolean)));
   if (!uniq.length) return out;
+  loadCache();
+
+  // 全部命中缓存则零请求返回（也不必加载 JSAPI）
+  const cacheKey = (raw: string) => `${destination}|${raw.toLowerCase()}`;
+  if (uniq.every((q) => poiCache.has(cacheKey(q)))) {
+    for (const q of uniq) out[q] = poiCache.get(cacheKey(q)) ?? null;
+    return out;
+  }
 
   let ns: AmapNs;
   try {
     ns = await loadAmap();
   } catch {
-    for (const q of uniq) out[q] = null;
+    // JSAPI 不可用：已有缓存的仍然给，其余 null（调用方回落 OSM）
+    for (const q of uniq) out[q] = poiCache.get(cacheKey(q)) ?? null;
     return out;
   }
   const inCity = new ns.PlaceSearch({
@@ -192,15 +250,22 @@ export async function amapGeocodePois(
   const nationwide = new ns.PlaceSearch({ pageSize: 1, pageIndex: 1 });
 
   async function resolveOne(raw: string): Promise<Pt | null> {
-    const key = `${destination}|${raw.toLowerCase()}`;
+    const key = cacheKey(raw);
     if (poiCache.has(key)) return poiCache.get(key) ?? null;
     let p: Pt | null = null;
+    let sawTransient = false;
     for (const v of variants(raw)) {
-      p = await searchOnce(inCity, v);
-      if (p) break;
+      const r = await searchOnce(inCity, v);
+      sawTransient ||= r.transient;
+      if (r.pt) {
+        p = r.pt;
+        break;
+      }
     }
     if (!p) {
-      const cand = await searchOnce(nationwide, raw);
+      const r = await searchOnce(nationwide, raw);
+      sawTransient ||= r.transient;
+      const cand = r.pt;
       if (
         cand &&
         (!centerGcj ||
@@ -209,7 +274,8 @@ export async function amapGeocodePois(
         p = cand;
       }
     }
-    poiCache.set(key, p);
+    // 临时失败（配额/QPS/超时）导致的 miss 不缓存，下次访问重试
+    if (p || !sawTransient) poiCache.set(key, p);
     return p;
   }
 
@@ -222,5 +288,6 @@ export async function amapGeocodePois(
     }
   });
   await Promise.all(workers);
+  saveCache();
   return out;
 }

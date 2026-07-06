@@ -1,16 +1,18 @@
 "use client";
 
 /**
- * 行程地图 · 高德 JSAPI 2.0 引擎（国内行程默认；与首页展示带同款 3D 斜俯视观感）。
+ * 行程地图 · 高德 JSAPI 2.0 引擎（国内行程默认；2D 正俯视，与首页地图同观感）。
  *
  * 与 Leaflet 引擎同一套 EngineProps：针脚（按天着色 + 全局序号）、当天动线、
  * InfoWindow 详情（在行程中查看/加入行程）、按天聚焦、列表 ↔ 针脚 hover 联动、
  * 网友推荐建议层、触屏定位。坐标经 map-core.toGcj() 统一为 GCJ-02。
+ * 明确不用 3D 斜俯视：用户要的是和首页一致的 2D 平视工作图（3D 也曾在
+ * WSL/部分 Chrome 上渲出空白 canvas）。
  *
  * 可靠性（吸取首页高德 3D 空白 canvas 的教训）：
  *  - 无 WebGL 直接回落；加载后轮询容器内是否真出 canvas，~6s 未出即 onFallback；
  *  - 空白 canvas 无法从外部检测（跨域瓦片污染读不了像素），故 shell 常驻
- *    「2D 底图」手动切换按钮兜底——任何情况下用户都能一键回到可用的 Leaflet。
+ *    「备用地图」手动切换按钮兜底——任何情况下用户都能一键回到可用的 Leaflet。
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -35,9 +37,6 @@ import {
   type AmapNs,
   type AmapOverlay,
 } from "./amap-kit";
-
-const PITCH = 45; // 俯仰角：与首页展示带一致的 3D 斜俯视
-const ROTATION = 0; // 行程工作图保持正北，方位直觉优先（展示带才转角度）
 
 /** Pt → [lng, lat] GCJ-02（AMap 经度在前） */
 function toLngLat(pt: Resolved["pt"]): [number, number] {
@@ -124,15 +123,12 @@ export default function TripMapAMap({
         if (disposed || !boxRef.current || mapRef.current) return;
         nsRef.current = ns;
         const map = new ns.Map(boxRef.current, {
-          viewMode: "3D",
-          pitch: PITCH,
-          rotation: ROTATION,
+          viewMode: "2D", // 与首页一致的 2D 正俯视；不用 3D（用户明确不要，且 3D 曾出空白 canvas）
           zoom: 12,
           center: center ? toLngLat(center) : [120.62, 31.32],
           mapStyle: "amap://styles/whitesmoke",
-          // 与首页展示带一致：浅底 + 路网 + 立体楼块 + 行政/大地名注记，
-          // features 去掉 "point"（POI 点图层）避免小地标与行程针脚抢视线
-          showBuildingBlock: true,
+          // 浅底 + 路网 + 行政/大地名注记；features 去掉 "point"（POI 点图层）
+          // 避免小地标与行程针脚抢视线
           showLabel: true,
           features: ["bg", "road", "building"],
           dragEnable: true,
@@ -140,8 +136,8 @@ export default function TripMapAMap({
           scrollWheel: true,
           doubleClickZoom: true,
           keyboardEnable: false,
-          rotateEnable: true,
-          pitchEnable: true,
+          rotateEnable: false,
+          pitchEnable: false,
           jogEnable: true,
         });
         mapRef.current = map;
@@ -380,17 +376,9 @@ export default function TripMapAMap({
       return;
     }
 
-    // 取景：适配目标点集，随后复位俯仰（低缩放级高德会自动收敛俯仰，延迟再压一次）
+    // 取景：适配目标点集
     if (focusOverlays.length) {
       map.setFitView(focusOverlays, true, [64, 52, 52, 52], 16);
-      map.setPitch(PITCH);
-      map.setRotation(ROTATION);
-      const t = setTimeout(() => {
-        if (mapRef.current !== map) return;
-        map.setPitch(PITCH);
-        map.setRotation(ROTATION);
-      }, 400);
-      return () => clearTimeout(t);
     } else if (center) {
       map.setZoomAndCenter(11, toLngLat(center), true);
     }
