@@ -15,6 +15,11 @@ function outOfChina(lat: number, lon: number): boolean {
   return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271;
 }
 
+/** 粗略国内判定（bbox）：行程地图据此选高德引擎/地理编码源 */
+export function isInChina(lat: number, lon: number): boolean {
+  return !outOfChina(lat, lon);
+}
+
 function transformLat(x: number, y: number): number {
   let ret =
     -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));

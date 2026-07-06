@@ -1034,6 +1034,14 @@ body::before {
 .leaflet-container {
   font: inherit;
 }
+/* 高德引擎的 InfoWindow（isCustom）：套同一批 .tp-pop-* 类，与 Leaflet 弹窗同观感 */
+.tp-pop-amap {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  padding: 10px 14px;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
 
 /* ── 打印 / 存 PDF：「旅行手册」版式——刊头封面条 + 每日分页 + 票根/预算/打包 ── */
 @media print {

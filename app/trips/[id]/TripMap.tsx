@@ -1,94 +1,68 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Map as LMap, LayerGroup, Marker } from "leaflet";
-import "leaflet/dist/leaflet.css";
-import { dayColorOf } from "@/lib/palette";
-import { wgs84ToGcj02 } from "@/lib/gcj02";
+/**
+ * 行程地图 shell：地点解析（地理编码）+ 引擎选择 + 图例/聚焦控件。
+ * 渲染交给双引擎之一：
+ *  - TripMapAMap：高德 JSAPI 2.0（国内行程默认，与首页展示带同款 3D 斜俯视）
+ *  - TripMapLeaflet：Leaflet + 高德栅格瓦片（出境行程 / 高德不可用时的保底）
+ *
+ * 地理编码策略：
+ *  - 国内（目的地中心落在国内 bbox）且配了高德 key → 高德 PlaceSearch
+ *    （city 锁定目的地，GCJ-02 原生，杜绝「同名异地」把针脚甩到合肥/杭州），
+ *    查不到的少数条目回落 /api/geocode（OSM 系，已收紧距离阈值）；
+ *  - 其余 → /api/geocode 原路径。
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { isInChina } from "@/lib/gcj02";
 import { Map as MapIcon } from "@/app/ui/icons";
+import {
+  colorOf,
+  mappable,
+  toWgs,
+  type Day,
+  type MapSpot,
+  type Meta,
+  type Pt,
+  type Resolved,
+  type ResolvedSpot,
+} from "./map-core";
+import { amapGeocodePois, hasAmapKey } from "./amap-kit";
+import TripMapLeaflet from "./TripMapLeaflet";
+import TripMapAMap from "./TripMapAMap";
 
-/** 与 page.tsx 对齐的最小类型 */
-interface Item {
-  time: string;
-  title: string;
-  kind: string;
-  detail: string;
-  est_cost: number;
-}
-interface Day {
-  day: number;
-  date: string;
-  theme: string;
-  items: Item[];
-}
-interface Meta {
-  destination: string | null;
-  origin: string | null;
-  start_date: string | null;
-  end_date: string | null;
-}
-interface Pt {
-  lat: number;
-  lon: number;
-  label: string;
-}
-/** 网友攻略推荐点（来自小红书攻略面板，未必已加入行程）——地图上作独立「建议」图层 */
-interface MapSpot {
-  title: string;
-  kind: string; // activity | food
-  reason?: string;
-  area?: string;
-  source_url?: string;
-}
-interface ResolvedSpot {
-  title: string;
-  kind: string;
-  reason?: string;
-  source_url?: string;
-  pt: Pt;
+// 本会话内高德引擎是否已确认不可用（加载/渲染失败后不再反复尝试）
+let amapBrokenSession = false;
+
+/** 用户手动引擎偏好（localStorage 持久化；null = 自动） */
+function readEnginePref(): "amap" | "leaflet" | null {
+  try {
+    const v = window.localStorage.getItem("trip-map-engine");
+    return v === "amap" || v === "leaflet" ? v : null;
+  } catch {
+    return null;
+  }
 }
 
-// 按天配色：全站统一取自 lib/palette（与编号针/分享页/预算图一致）
-const colorOf = dayColorOf;
-
-/** WGS-84 → 高德 GCJ-02 落点：高德中文瓦片是加偏坐标系，直接把 WGS-84 点落上去会
- *  整体偏移 ~500m（针脚落到错误街区）。仅用于「往地图上落点」（marker/polyline/取景）；
- *  条目间路程耗时用 onResolved 回传的原始 WGS-84，不走此转换。境外自动原样返回。 */
-const toMap = (lat: number, lon: number): [number, number] => wgs84ToGcj02(lat, lon);
-
-/** 类别 → 弹窗里的中文标签（配类别色圆点，替代 emoji） */
-const KIND_LABEL: Record<string, string> = {
-  activity: "活动",
-  food: "餐饮",
-  rest: "住宿",
-  transit: "交通",
-};
-const KIND_COLOR: Record<string, string> = {
-  activity: "var(--c-activity)",
-  food: "var(--c-food)",
-  rest: "var(--c-rest)",
-  transit: "var(--c-transit)",
-};
-
-/** 哪些条目值得落到地图上（有具体地点的）。本地交通/纯休息标题太泛，靠 geocode 结果自然过滤。 */
-function mappable(it: Item): boolean {
-  if (!it.title?.trim()) return false;
-  if (it.kind === "transit") return false; // 城际交通端点已由活动覆盖，避免连线穿城
-  return true;
-}
-
-interface Resolved {
-  key: string; // di-ii
-  day: number;
-  date: string;
-  theme: string;
-  time: string;
-  title: string;
-  kind: string;
-  detail: string;
-  est_cost: number;
-  pt: Pt;
-  step: number; // 全局顺序编号
+async function postGeocode(body: {
+  destination: string;
+  origin: string;
+  queries: string[];
+}): Promise<{
+  center: Pt | null;
+  originPoint: Pt | null;
+  points: Record<string, Pt | null>;
+}> {
+  const res = await fetch("/api/geocode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || "地点定位失败");
+  }
+  return data;
 }
 
 export default function TripMap({
@@ -116,7 +90,7 @@ export default function TripMap({
   onHoverKey?: (key: string | null) => void;
   /** 滚动联动：页面滚到第几天就聚焦第几天（null=全程）。undefined 表示不启用 */
   syncDay?: number | null;
-  /** 触屏定位：设置后 flyTo 该条目针脚并打开弹窗（每次点按传新对象以重复触发） */
+  /** 触屏定位：设置后飞到该条目针脚并打开弹窗（每次点按传新对象以重复触发） */
   spot?: { key: string } | null;
   /** 弹窗里「在行程中查看」被点时回传条目 key（页面滚回对应条目） */
   onLocateItem?: (key: string) => void;
@@ -145,6 +119,13 @@ export default function TripMap({
   const [resolvedSpots, setResolvedSpots] = useState<ResolvedSpot[]>([]);
   const [showSpots, setShowSpots] = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  // null = 尚未判定（首次 geocode 前不挂引擎，避免闪一下再切换）
+  const [domestic, setDomestic] = useState<boolean | null>(null);
+  const [enginePref, setEnginePref] = useState<"amap" | "leaflet" | null>(() =>
+    typeof window === "undefined" ? null : readEnginePref(),
+  );
+  // 高德失败回落的重渲染触发器
+  const [, setBrokenTick] = useState(0);
 
   // 滚动联动：页面滚到哪天，地图聚焦哪天（手动点天数 chip 仍即时生效，
   // 继续滚动后由 scrollspy 重新接管——行为可预期）。
@@ -155,18 +136,8 @@ export default function TripMap({
     if (syncDay !== undefined) setSelectedDay(syncDay);
   }
 
-  // 回调用 ref 持有：marker 事件只绑一次，不随回调身份变化重建
-  const onHoverKeyRef = useRef(onHoverKey);
-  const onLocateItemRef = useRef(onLocateItem);
-  const onAddSpotRef = useRef(onAddSpot);
-  useEffect(() => {
-    onHoverKeyRef.current = onHoverKey;
-    onLocateItemRef.current = onLocateItem;
-    onAddSpotRef.current = onAddSpot;
-  });
-  // 最近一次触屏定位（5s 窗口）：定位引发的页面滚动会让 syncDay 变化触发重绘，
-  // 重绘销毁旧针脚并 fitBounds 复位——重绘结束后据此补聚焦，保证定位不被打断
-  const spotRef = useRef<{ key: string; ts: number } | null>(null);
+  // 天数 chip 点击信号：引擎据此清除触屏定位的 5s 窗口（避免按天取景被劫持）
+  const [spotClearSeq, setSpotClearSeq] = useState(0);
 
   // ── 地点 → 坐标 ──
   useEffect(() => {
@@ -185,21 +156,43 @@ export default function TripMap({
         spots.forEach((sp) => {
           if (sp.title?.trim()) queries.push(sp.title.trim());
         });
-        const res = await fetch("/api/geocode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            destination: meta.destination ?? "",
-            origin: meta.origin ?? "",
-            queries,
-          }),
-        });
-        const data = (await res.json()) as {
-          center: Pt | null;
-          originPoint: Pt | null;
-          points: Record<string, Pt | null>;
-        };
-        if (!res.ok) throw new Error((data as unknown as { error?: string }).error || "地点定位失败");
+        const uniq = Array.from(new Set(queries));
+        const destination = meta.destination ?? "";
+
+        let centerPt: Pt | null = null;
+        let originPt: Pt | null = null;
+        let points: Record<string, Pt | null> = {};
+        let isDomestic = false;
+
+        if (hasAmapKey && destination) {
+          // 先定城市中心（轻请求）→ 判国内与否，再决定 POI 编码走哪条路
+          const base = await postGeocode({ destination, origin: meta.origin ?? "", queries: [] });
+          centerPt = base.center;
+          originPt = base.originPoint;
+          isDomestic = !!centerPt && isInChina(centerPt.lat, centerPt.lon);
+          if (isDomestic) {
+            const { wgs84ToGcj02 } = await import("@/lib/gcj02");
+            const cGcj = centerPt
+              ? wgs84ToGcj02(centerPt.lat, centerPt.lon)
+              : null;
+            points = await amapGeocodePois(destination, uniq, cGcj);
+            // 高德查不到的少数条目回落 OSM 系（已收紧的距离过滤兜底）
+            const misses = uniq.filter((q) => !points[q]);
+            if (misses.length) {
+              const fb = await postGeocode({ destination, origin: "", queries: misses });
+              for (const q of misses) points[q] = fb.points[q] ?? null;
+            }
+          } else {
+            const fb = await postGeocode({ destination, origin: meta.origin ?? "", queries: uniq });
+            points = fb.points;
+          }
+        } else {
+          const fb = await postGeocode({ destination, origin: meta.origin ?? "", queries: uniq });
+          centerPt = fb.center;
+          originPt = fb.originPoint;
+          points = fb.points;
+          isDomestic = !!centerPt && isInChina(centerPt.lat, centerPt.lon);
+        }
         if (!alive) return;
 
         const list: Resolved[] = [];
@@ -207,7 +200,7 @@ export default function TripMap({
         days.forEach((d, di) =>
           d.items.forEach((it, ii) => {
             if (!mappable(it)) return;
-            const pt = data.points[it.title.trim()];
+            const pt = points[it.title.trim()];
             if (!pt) return; // 查不到坐标 → 不在图上虚构
             step += 1;
             list.push({
@@ -235,7 +228,7 @@ export default function TripMap({
           if (!title) return;
           const n = norm(title);
           if (itinTitles.has(n) || seenSpot.has(n)) return;
-          const pt = data.points[title];
+          const pt = points[title];
           if (!pt) return; // 查不到坐标 → 不虚构落点
           seenSpot.add(n);
           spotList.push({
@@ -247,14 +240,15 @@ export default function TripMap({
           });
         });
 
-        setCenter(data.center);
-        setOrigin(data.originPoint);
+        setCenter(centerPt);
+        setOrigin(originPt);
         setResolved(list);
         setResolvedSpots(spotList);
-        // 坐标上交给页面（条目间路程耗时估算用）
+        setDomestic(isDomestic);
+        // 坐标上交给页面（条目间路程耗时估算用）——统一还原成 WGS-84
         if (onResolved) {
           const coords: Record<string, { lat: number; lon: number }> = {};
-          for (const r of list) coords[r.key] = { lat: r.pt.lat, lon: r.pt.lon };
+          for (const r of list) coords[r.key] = toWgs(r.pt);
           onResolved(coords);
         }
       } catch (e) {
@@ -269,269 +263,19 @@ export default function TripMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
-  // ── Leaflet 实例（只建一次） ──
-  const mapEl = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<LMap | null>(null);
-  const layerRef = useRef<LayerGroup | null>(null);
-  const LRef = useRef<typeof import("leaflet") | null>(null);
-  // 条目 key → marker：hover 联动用（重绘时重建）
-  const markerByKey = useRef<Map<string, Marker>>(new Map());
-  const [ready, setReady] = useState(false);
+  // ── 引擎选择：国内 + 有 key + 未确认失败 → 高德；用户手动偏好优先 ──
+  const amapEligible = domestic === true && hasAmapKey && !amapBrokenSession;
+  const engine: "amap" | "leaflet" | null =
+    domestic === null ? null : amapEligible && enginePref !== "leaflet" ? "amap" : "leaflet";
 
-  useEffect(() => {
-    let disposed = false;
-    (async () => {
-      const L = (await import("leaflet")).default;
-      if (disposed || !mapEl.current || mapRef.current) return;
-      LRef.current = L;
-      const map = L.map(mapEl.current, {
-        zoomControl: true,
-        scrollWheelZoom: false, // 避免页面滚动时误缩放；按 + / 拖拽缩放
-        attributionControl: true,
-      }).setView([35.68, 139.76], 11);
-      // 与首页展示地图一致：高德中文瓦片（scl=1=含区县/街道/POI 中文注记，style=7 标准电子图）。
-      // 高德是 GCJ-02 加偏坐标 → 所有落点须经 toMap() 转换，否则针脚偏移。.sc-tiles 降饱和到暖纸调。
-      L.tileLayer(
-        "https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
-        {
-          subdomains: "1234",
-          maxZoom: 18,
-          className: "sc-tiles",
-          attribution: '&copy; <a href="https://amap.com">高德地图</a>',
-        },
-      ).addTo(map);
-      layerRef.current = L.layerGroup().addTo(map);
-      mapRef.current = map;
-      setReady(true);
-    })();
-    return () => {
-      disposed = true;
-      mapRef.current?.remove();
-      mapRef.current = null;
-      layerRef.current = null;
-      setReady(false);
-    };
-  }, []);
-
-  // ── 重绘标记 / 路线（数据或选中天变化时） ──
-  useEffect(() => {
-    const L = LRef.current;
-    const map = mapRef.current;
-    const group = layerRef.current;
-    if (!ready || !L || !map || !group) return;
-    group.clearLayers();
-    markerByKey.current.clear();
-
-    const focused = selectedDay; // null = 全部
-    const allLatLng: [number, number][] = [];
-    const focusLatLng: [number, number][] = [];
-
-    // 掉落进场（与落地页演示一致）：按落图顺序错峰，reduced-motion 由全局 CSS 钳制
-    let dropIdx = 0;
-    const pin = (
-      color: string,
-      label: string,
-      dim: boolean,
-      size = 30,
-    ) => {
-      const delay = Math.min(dropIdx++ * 60, 720);
-      return L.divIcon({
-        className: "",
-        html: `<div class="tp-pin tp-drop${dim ? " tp-dim" : ""}" style="--c:${color};animation-delay:${delay}ms"><div class="tp-pin-inner"><span>${label}</span></div></div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size - 2],
-        popupAnchor: [0, -size + 4],
-      });
-    };
-
-    const esc = (s: string) =>
-      (s ?? "").replace(/[&<>"]/g, (c) =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
-      );
-
-    // 出发地
-    if (origin) {
-      const dim = focused !== null;
-      const o = toMap(origin.lat, origin.lon);
-      L.marker(o, {
-        icon: pin("#0f172a", "起", dim, 34),
-        zIndexOffset: 1000,
-      })
-        .bindPopup(
-          `<div class="tp-pop"><div class="tp-pop-h">出发地</div><div class="tp-pop-t">${esc(meta.origin ?? origin.label)}</div></div>`,
-        )
-        .addTo(group);
-      allLatLng.push(o);
+  function setPref(v: "amap" | "leaflet") {
+    try {
+      window.localStorage.setItem("trip-map-engine", v);
+    } catch {
+      /* 隐私模式等场景忽略 */
     }
-
-    // 按天分组连线
-    const byDay = new Map<number, Resolved[]>();
-    resolved.forEach((r) => {
-      if (!byDay.has(r.day)) byDay.set(r.day, []);
-      byDay.get(r.day)!.push(r);
-    });
-
-    for (const [day, items] of byDay) {
-      const color = colorOf(day);
-      const dim = focused !== null && focused !== day;
-      const latlngs = items.map((r) => toMap(r.pt.lat, r.pt.lon));
-
-      // 当天动线
-      if (latlngs.length > 1) {
-        L.polyline(latlngs, {
-          color,
-          weight: 3,
-          opacity: dim ? 0.12 : 0.7,
-          className: dim ? "" : "tp-route",
-          lineCap: "round",
-          lineJoin: "round",
-        }).addTo(group);
-      }
-
-      items.forEach((r, idx) => {
-        const pos = latlngs[idx];
-        const m: Marker = L.marker(pos, {
-          icon: pin(color, String(r.step), dim),
-          zIndexOffset: dim ? 0 : 500,
-          riseOnHover: true,
-        });
-        const kindDot = `<span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:${KIND_COLOR[r.kind] ?? "var(--c-other)"};margin-right:5px;vertical-align:1px"></span>`;
-        m.bindPopup(
-          `<div class="tp-pop">
-             <div class="tp-pop-h" style="color:${color}">第 ${r.day} 天 · 第 ${r.step} 站 · ${KIND_LABEL[r.kind] ?? "地点"}</div>
-             <div class="tp-pop-t">${kindDot}${esc(r.title)}</div>
-             ${r.time ? `<div class="tp-pop-time">${esc(r.time)}</div>` : ""}
-             ${r.detail ? `<div class="tp-pop-d">${esc(r.detail)}</div>` : ""}
-             ${r.est_cost ? `<div class="tp-pop-c">约 ¥${r.est_cost}</div>` : ""}
-             <button type="button" class="tp-pop-go">在行程中查看 ↓</button>
-           </div>`,
-          { className: "tp-pop-wrap" },
-        );
-        // 弹窗「在行程中查看」→ 页面滚回该条目（触屏的针脚→列表反向联动）
-        m.on("popupopen", () => {
-          m.getPopup()
-            ?.getElement()
-            ?.querySelector(".tp-pop-go")
-            ?.addEventListener(
-              "click",
-              () => onLocateItemRef.current?.(r.key),
-              { once: true },
-            );
-        });
-        // 悬停轻提示 + 双向联动（点击仍是详情弹窗）；direction auto 避免贴边裁切
-        m.bindTooltip(`${r.time ? `${esc(r.time)} · ` : ""}${esc(r.title)}`, {
-          direction: "auto",
-          className: "tp-tip",
-        });
-        m.on("mouseover", () => onHoverKeyRef.current?.(r.key));
-        m.on("mouseout", () => onHoverKeyRef.current?.(null));
-        m.addTo(group);
-        markerByKey.current.set(r.key, m);
-        allLatLng.push(pos);
-        if (focused === day) focusLatLng.push(pos);
-      });
-    }
-
-    // ── 网友推荐建议层（独立样式：虚线圈 + emoji，标识"未加入"）──
-    if (showSpots && resolvedSpots.length) {
-      resolvedSpots.forEach((s) => {
-        const isFood = s.kind === "food";
-        const c = isFood ? "var(--c-food)" : "var(--c-activity)";
-        const emoji = isFood ? "🍜" : "📍";
-        const icon = L.divIcon({
-          className: "",
-          html: `<div style="width:24px;height:24px;border-radius:99px;background:#fff;border:2px dashed ${c};display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;box-shadow:0 2px 6px rgba(11,17,36,.22)">${emoji}</div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12],
-          popupAnchor: [0, -12],
-        });
-        const pos = toMap(s.pt.lat, s.pt.lon);
-        const m: Marker = L.marker(pos, {
-          icon,
-          zIndexOffset: 200,
-          riseOnHover: true,
-        });
-        m.bindPopup(
-          `<div class="tp-pop">
-             <div class="tp-pop-h" style="color:${c}">网友推荐 · 未加入</div>
-             <div class="tp-pop-t">${esc(s.title)}</div>
-             ${s.reason ? `<div class="tp-pop-d">${esc(s.reason)}</div>` : ""}
-             ${s.source_url ? `<div class="tp-pop-time">${/xiaohongshu\.com|xhslink\.com/i.test(s.source_url) ? "📕 小红书" : "网友攻略"}</div>` : ""}
-             <button type="button" class="tp-pop-go">加入行程 +</button>
-           </div>`,
-          { className: "tp-pop-wrap" },
-        );
-        m.on("popupopen", () => {
-          m.getPopup()
-            ?.getElement()
-            ?.querySelector(".tp-pop-go")
-            ?.addEventListener(
-              "click",
-              () => {
-                onAddSpotRef.current?.({
-                  title: s.title,
-                  kind: s.kind,
-                  reason: s.reason,
-                  source_url: s.source_url,
-                });
-                m.closePopup();
-              },
-              { once: true },
-            );
-        });
-        m.bindTooltip(`💡 ${esc(s.title)}`, { direction: "auto", className: "tp-tip" });
-        m.addTo(group);
-        // 仅在「全程」视图把建议点纳入自适应，避免按天聚焦时被拉远
-        if (focused === null) allLatLng.push(pos);
-      });
-    }
-
-    // 触屏定位窗口期内：跳过视图自适应，改为聚焦目标针脚并开弹窗
-    const sp = spotRef.current;
-    const spotMarker =
-      sp && Date.now() - sp.ts < 5000 ? markerByKey.current.get(sp.key) : null;
-    if (spotMarker) {
-      map.setView(spotMarker.getLatLng(), Math.max(map.getZoom(), 15), {
-        animate: true,
-      });
-      window.setTimeout(() => spotMarker.openPopup(), 350);
-      return;
-    }
-
-    // 视图自适应
-    const fitTarget = focused !== null && focusLatLng.length ? focusLatLng : allLatLng;
-    if (fitTarget.length === 1) {
-      map.setView(fitTarget[0], 14, { animate: true });
-    } else if (fitTarget.length > 1) {
-      map.fitBounds(fitTarget, { padding: [48, 48], maxZoom: 15, animate: true });
-    } else if (center) {
-      map.setView(toMap(center.lat, center.lon), 11);
-    }
-  }, [ready, resolved, resolvedSpots, showSpots, origin, center, selectedDay, meta.origin]);
-
-  // ── 列表行 hover → 对应针脚放大 + 轻提示（反向由 marker mouseover 回传 onHoverKey）──
-  useEffect(() => {
-    for (const [key, m] of markerByKey.current) {
-      const el = m.getElement()?.querySelector(".tp-pin");
-      if (!el) continue;
-      el.classList.toggle("tp-hot", key === hoverKey);
-      if (key === hoverKey) m.openTooltip();
-      else m.closeTooltip();
-    }
-    // resolved/selectedDay 变化会重建 marker，需重放当前 hover 态
-  }, [hoverKey, resolved, selectedDay]);
-
-  // ── 触屏定位：flyTo 目标针脚并打开弹窗（spot 每次是新对象，可重复触发同一条目）──
-  useEffect(() => {
-    if (!spot) return;
-    spotRef.current = { key: spot.key, ts: Date.now() };
-    const m = markerByKey.current.get(spot.key);
-    const map = mapRef.current;
-    if (!m || !map) return;
-    map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 15), { duration: 0.8 });
-    const t = window.setTimeout(() => m.openPopup(), 850);
-    return () => window.clearTimeout(t);
-  }, [spot]);
+    setEnginePref(v);
+  }
 
   const dayNumbers = useMemo(
     () => Array.from(new Set(resolved.map((r) => r.day))).sort((a, b) => a - b),
@@ -542,6 +286,22 @@ export default function TripMap({
     () => days.reduce((n, d) => n + d.items.filter(mappable).length, 0),
     [days],
   );
+
+  const engineProps = {
+    resolved,
+    resolvedSpots,
+    showSpots,
+    origin,
+    center,
+    meta,
+    selectedDay,
+    hoverKey,
+    onHoverKey,
+    spot,
+    spotClearSeq,
+    onLocateItem,
+    onAddSpot,
+  };
 
   return (
     <section className={fill ? "flex h-full flex-col" : "mt-6"}>
@@ -562,7 +322,7 @@ export default function TripMap({
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => {
-              spotRef.current = null;
+              setSpotClearSeq((n) => n + 1);
               setSelectedDay(null);
             }}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
@@ -580,7 +340,7 @@ export default function TripMap({
               <button
                 key={d}
                 onClick={() => {
-                  spotRef.current = null;
+                  setSpotClearSeq((n) => n + 1);
                   setSelectedDay(active ? null : d);
                 }}
                 className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer ${
@@ -588,11 +348,7 @@ export default function TripMap({
                     ? "text-white"
                     : "border-line text-muted hover:border-line-strong"
                 }`}
-                style={
-                  active
-                    ? { background: c, borderColor: c }
-                    : undefined
-                }
+                style={active ? { background: c, borderColor: c } : undefined}
               >
                 <span
                   className="h-2.5 w-2.5 rounded-full"
@@ -633,10 +389,40 @@ export default function TripMap({
           fill ? "min-h-0 flex-1" : ""
         }`}
       >
-        <div
-          ref={mapEl}
-          className={`w-full bg-neutral-100 ${fill ? "h-full min-h-[320px]" : "h-[460px]"}`}
-        />
+        <div className={`w-full bg-neutral-100 ${fill ? "h-full min-h-[320px]" : "h-[460px]"}`}>
+          {engine === "amap" && (
+            <TripMapAMap
+              {...engineProps}
+              onFallback={() => {
+                amapBrokenSession = true;
+                setBrokenTick((n) => n + 1);
+              }}
+            />
+          )}
+          {engine === "leaflet" && <TripMapLeaflet {...engineProps} />}
+        </div>
+
+        {/* 引擎手动切换（也是高德空白 canvas 等「检测不出的失败」的逃生门） */}
+        {engine === "amap" && (
+          <button
+            type="button"
+            onClick={() => setPref("leaflet")}
+            className="absolute bottom-3 right-3 z-10 rounded-full border border-line bg-white/90 px-2.5 py-1 text-[11px] text-muted shadow-soft backdrop-blur-sm hover:border-line-strong hover:text-ink"
+            title="地图显示不正常？切回稳定的 2D 底图"
+          >
+            2D 底图
+          </button>
+        )}
+        {engine === "leaflet" && amapEligible && (
+          <button
+            type="button"
+            onClick={() => setPref("amap")}
+            className="absolute bottom-3 right-3 z-10 rounded-full border border-line bg-white/90 px-2.5 py-1 text-[11px] text-muted shadow-soft backdrop-blur-sm hover:border-line-strong hover:text-ink"
+            title="切换为高德 3D 斜俯视"
+          >
+            高德 3D
+          </button>
+        )}
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
