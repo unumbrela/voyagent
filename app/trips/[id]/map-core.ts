@@ -62,7 +62,8 @@ export interface Resolved {
   detail: string;
   est_cost: number;
   pt: Pt;
-  step: number; // 全局顺序编号
+  /** 当天内序号（= 列表 ItemCard 的 number，含交通/未定位项；图上缺号=该项没定位上） */
+  step: number;
 }
 
 // 按天配色：全站统一取自 lib/palette（与编号针/分享页/预算图一致）
@@ -111,7 +112,7 @@ export function esc(s: string): string {
 export function itemPopupHtml(r: Resolved, color: string): string {
   const kindDot = `<span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:${KIND_COLOR[r.kind] ?? "var(--c-other)"};margin-right:5px;vertical-align:1px"></span>`;
   return `<div class="tp-pop">
-    <div class="tp-pop-h" style="color:${color}">第 ${r.day} 天 · 第 ${r.step} 站 · ${KIND_LABEL[r.kind] ?? "地点"}</div>
+    <div class="tp-pop-h" style="color:${color}">第 ${r.day} 天 · 第 ${r.step} 项 · ${KIND_LABEL[r.kind] ?? "地点"}</div>
     <div class="tp-pop-t">${kindDot}${esc(r.title)}</div>
     ${r.time ? `<div class="tp-pop-time">${esc(r.time)}</div>` : ""}
     ${r.detail ? `<div class="tp-pop-d">${esc(r.detail)}</div>` : ""}

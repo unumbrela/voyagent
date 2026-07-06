@@ -203,13 +203,11 @@ export default function TripMap({
         if (!alive) return;
 
         const list: Resolved[] = [];
-        let step = 0;
         days.forEach((d, di) =>
           d.items.forEach((it, ii) => {
             if (!mappable(it)) return;
             const pt = points[it.title.trim()];
             if (!pt) return; // 查不到坐标 → 不在图上虚构
-            step += 1;
             list.push({
               key: `${di}-${ii}`,
               day: d.day,
@@ -221,7 +219,9 @@ export default function TripMap({
               detail: it.detail,
               est_cost: it.est_cost,
               pt,
-              step,
+              // 与列表编号针同源（ItemCard number={ii+1}，当天内含交通/未定位项）：
+              // 地图针号 = 列表卡号，定位失败的条目在图上跳号，但绝不错位
+              step: ii + 1,
             });
           }),
         );
