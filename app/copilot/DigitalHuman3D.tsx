@@ -392,11 +392,15 @@ export default function DigitalHuman3D({
                 // 直接驱动模型自带 viseme_*（RPM/VRoid 雕刻好）
                 if (v !== "viseme_sil") target[v] = proc || 1;
               } else {
-                // synth：jawOpen + 圆唇/咧嘴合成（mpfb）
-                target.jawOpen = proc || V_JAW[v] || 0.14;
-                target.mouthPucker = Math.max(target.mouthPucker, V_ROUND[v] || 0);
-                target.mouthSmileLeft = Math.max(target.mouthSmileLeft, V_WIDE[v] || 0);
-                target.mouthSmileRight = Math.max(target.mouthSmileRight, V_WIDE[v] || 0);
+                // synth：jawOpen + 圆唇/咧嘴合成（mpfb）。proc 只是 0..1 的幅度包络，不能直接
+                // 灌进 jawOpen——V_JAW 标定上限才 0.34，灌到 1.0 下颌会张到变形（线上未配云 TTS
+                // 走 Web Speech 回退时远舟嘴崩坏的根因）。程序化模式改为用包络调制标定幅度，
+                // 与音频驱动同一量程；音频模式（proc=0）行为不变。
+                const k = proc ? 0.35 + 0.65 * proc : 1;
+                target.jawOpen = (V_JAW[v] || 0.14) * k;
+                target.mouthPucker = Math.max(target.mouthPucker, (V_ROUND[v] || 0) * k);
+                target.mouthSmileLeft = Math.max(target.mouthSmileLeft, (V_WIDE[v] || 0) * k);
+                target.mouthSmileRight = Math.max(target.mouthSmileRight, (V_WIDE[v] || 0) * k);
               }
             }
 
