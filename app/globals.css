@@ -879,6 +879,9 @@ body::before {
   gap: 0.3rem;
   padding: 2px 7px;
   white-space: nowrap;
+  max-width: 11em; /* 行程页标题可能很长：超出省略（首页短名不受影响） */
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
@@ -888,6 +891,14 @@ body::before {
   font-weight: 700;
   line-height: 1.3;
   pointer-events: none;
+}
+/* 行程页按天聚焦：非当天针脚整体淡出（针+标签），保持当天动线清爽 */
+.sc-lfmarker.sc-lfdim {
+  opacity: 0.22;
+  filter: grayscale(0.6);
+}
+.sc-lfmarker.sc-lfdim .sc-lflabel {
+  opacity: 0;
 }
 .amp-label i {
   font-style: normal;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { placeVariants } from "@/lib/place-variants";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -104,25 +105,6 @@ async function geocodeCity(name: string): Promise<Point | null> {
 }
 
 /**
- * 中文行程条目常见的「复合名」拆成查询变体，按可信度排序：
- * 原名 → 去括号 → 「·/•」各分段 → 括号内容（多为街区/商圈，位置近似可接受）。
- * 如「荣阳楼（山塘街）」→ [原名, 荣阳楼, 山塘街]；「平江路 · 摇橹船夜游」→ [原名, 平江路, 摇橹船夜游]。
- */
-function queryVariants(raw: string): string[] {
-  const out: string[] = [];
-  const push = (s: string) => {
-    const t = s.trim().replace(/\s+/g, " ");
-    if (t.length >= 2 && !out.includes(t)) out.push(t);
-  };
-  push(raw);
-  const noParen = raw.replace(/[（(][^）)]*[）)]/g, " ");
-  push(noParen);
-  for (const seg of noParen.split(/[·•—–]/)) push(seg);
-  for (const m of raw.matchAll(/[（(]([^）)]+)[）)]/g)) push(m[1]);
-  return out;
-}
-
-/**
  * POI 级地理编码：Photon 带「目的地中心」偏置最准（附加城市名反而拉低中文命中），
  * 逐策略尝试，返回首个落在目的地 MAX_KM 内的结果；都不在范围内则判为查不到（不在异国虚构落点）。
  * 原名查不到时退到 queryVariants 的拆分变体（招牌名/街区名），请求数有上限。
@@ -137,7 +119,7 @@ async function geocodeOne(
 
   const withCity =
     destination && !raw.includes(destination) ? `${raw} ${destination}` : raw;
-  const alts = queryVariants(raw).slice(1, 4); // 除原名外最多 3 个变体
+  const alts = placeVariants(raw).slice(1, 5); // 除原名外最多 4 个变体（含剥动词版本）
   const tries: (() => Promise<Point | null>)[] = [
     () => photon(raw, bias),
     ...(withCity !== raw ? [() => photon(withCity, bias)] : []),

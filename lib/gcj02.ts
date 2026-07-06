@@ -20,6 +20,20 @@ export function isInChina(lat: number, lon: number): boolean {
   return !outOfChina(lat, lon);
 }
 
+/**
+ * 更严的国内判定：在粗框基础上抠掉朝鲜半岛与日本。
+ * 粗框把京都/首尔也框成「国内」，行程地图会给它们上高德瓦片 + GCJ 加偏——
+ * 高德的日本瓦片是 WGS 无偏的，针脚整体漂移数百米。分界取远离中国边境的经度：
+ * 纬度 40 以南中国最东 ~124.5°E（韩日均在其东），40 以北到 136°E（东北最东 ~135°E，
+ * 北海道 139°E 起）。
+ */
+export function isInChinaStrict(lat: number, lon: number): boolean {
+  if (!isInChina(lat, lon)) return false;
+  if (lat < 40 && lon > 124.0) return false; // 朝鲜半岛 / 日本本州以南
+  if (lat >= 40 && lon > 136) return false; // 北海道 / 本州北端
+  return true;
+}
+
 function transformLat(x: number, y: number): number {
   let ret =
     -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));

@@ -10,6 +10,7 @@
  */
 
 import AMapLoader from "@amap/amap-jsapi-loader";
+import { placeVariants } from "@/lib/place-variants";
 import type { Pt } from "./map-core";
 
 declare global {
@@ -102,7 +103,8 @@ export function loadAmap(): Promise<AmapNs> {
 
 // 缓存：目的地|地点名 → Pt | null。localStorage 持久化——个人 key 的搜索服务
 // 有每日配额，同一行程反复打开/编辑不该重复烧配额；null（查不到）也缓存。
-const CACHE_LS_KEY = "amap-poi-cache-v1";
+// v4：变体策略升级（剥动词前后缀 + 复合标题分段优先），换 key 废弃旧结果重查。
+const CACHE_LS_KEY = "amap-poi-cache-v4";
 const CACHE_CAP = 600;
 const poiCache = new Map<string, Pt | null>();
 let cacheLoaded = false;
@@ -136,6 +138,18 @@ function saveCache() {
   } catch {
     /* 隐私模式/超限忽略 */
   }
+}
+
+// 全局限速：个人 key 的搜索服务 3 QPS，多路并发的 JSONP 一齐发会成批打回
+// error（瞬时失败）→ 整批回落 OSM → 中文小 POI 大面积丢点。所有 search 统一排队，
+// 相邻两次请求至少间隔 MIN_GAP_MS（约 2.9 QPS，留余量）。
+const MIN_GAP_MS = 350;
+let nextSlotAt = 0;
+async function rateSlot() {
+  const now = Date.now();
+  const at = Math.max(now, nextSlotAt);
+  nextSlotAt = at + MIN_GAP_MS;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
 }
 
 /**
@@ -176,21 +190,6 @@ function searchOnce(
       finish({ lat, lon: lng, label: p?.name || keyword, sys: "gcj" }, false);
     });
   });
-}
-
-/** 中文条目常见「复合名」拆变体：原名 → 去括号 → 「·/•」分段 → 括号内容 */
-function variants(raw: string): string[] {
-  const out: string[] = [];
-  const push = (s: string) => {
-    const t = s.trim().replace(/\s+/g, " ");
-    if (t.length >= 2 && !out.includes(t)) out.push(t);
-  };
-  push(raw);
-  const noParen = raw.replace(/[（(][^）)]*[）)]/g, " ");
-  push(noParen);
-  for (const seg of noParen.split(/[·•—–]/)) push(seg);
-  for (const m of raw.matchAll(/[（(]([^）)]+)[）)]/g)) push(m[1]);
-  return out.slice(0, 4);
 }
 
 /** 球面距离（km）——全国兜底结果的「离目的地过远即拒绝」过滤 */
@@ -249,21 +248,43 @@ export async function amapGeocodePois(
   });
   const nationwide = new ns.PlaceSearch({ pageSize: 1, pageIndex: 1 });
 
+  // 瞬时失败（QPS/超时）自动重试一次：限速排队后重发，成功率显著提高
+  async function searchSteady(ps: AmapPlaceSearch, keyword: string) {
+    await rateSlot();
+    let r = await searchOnce(ps, keyword);
+    if (r.transient) {
+      await rateSlot();
+      r = await searchOnce(ps, keyword);
+    }
+    return r;
+  }
+
   async function resolveOne(raw: string): Promise<Pt | null> {
     const key = cacheKey(raw);
     if (poiCache.has(key)) return poiCache.get(key) ?? null;
+    const vars = placeVariants(raw);
+    // 含「·/：/，」的复合标题：PlaceSearch 拿整串模糊匹配常命中无关 POI
+    // （实测「平江路 · 摇橹船夜游」被配到太湖边的摇橹船码头），
+    // 干净分段（「平江路」）远更可信 → 原串降到最后兜底
+    const tryList =
+      /[·•—–，,、:：]/.test(raw) && vars.length > 1
+        ? [...vars.slice(1), vars[0]]
+        : vars;
     let p: Pt | null = null;
     let sawTransient = false;
-    for (const v of variants(raw)) {
-      const r = await searchOnce(inCity, v);
+    for (const v of tryList) {
+      const r = await searchSteady(inCity, v);
       sawTransient ||= r.transient;
       if (r.pt) {
         p = r.pt;
         break;
       }
     }
-    if (!p) {
-      const r = await searchOnce(nationwide, raw);
+    // 全国兜底也逐变体试（原名多为活动描述，剥完动词的变体才是 POI 名），
+    // 但必须落在目的地 MAX_KM 内，同名异地一律拒绝
+    for (const v of tryList.slice(0, 3)) {
+      if (p) break;
+      const r = await searchSteady(nationwide, v);
       sawTransient ||= r.transient;
       const cand = r.pt;
       if (
@@ -279,9 +300,9 @@ export async function amapGeocodePois(
     return p;
   }
 
-  // 有限并发（个人 key 有 QPS 限制，3 路足够快且稳）
+  // 双路并发即可：真正的节流由 rateSlot 全局限速兜底，多开只是让 JSONP 延迟重叠
   let i = 0;
-  const workers = Array.from({ length: Math.min(3, uniq.length) }, async () => {
+  const workers = Array.from({ length: Math.min(2, uniq.length) }, async () => {
     while (i < uniq.length) {
       const q = uniq[i++];
       out[q] = await resolveOne(q);

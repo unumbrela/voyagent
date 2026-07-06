@@ -13,8 +13,8 @@
  *  - 其余 → /api/geocode 原路径。
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { isInChina, wgs84ToGcj02 } from "@/lib/gcj02";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { isInChinaStrict, wgs84ToGcj02 } from "@/lib/gcj02";
 import { Map as MapIcon } from "@/app/ui/icons";
 import {
   colorOf,
@@ -177,7 +177,7 @@ export default function TripMap({
           const base = await postGeocode({ destination, origin: meta.origin ?? "", queries: [] });
           centerPt = base.center;
           originPt = base.originPoint;
-          isDomestic = !!centerPt && isInChina(centerPt.lat, centerPt.lon);
+          isDomestic = !!centerPt && isInChinaStrict(centerPt.lat, centerPt.lon);
           if (isDomestic) {
             const cGcj = centerPt
               ? wgs84ToGcj02(centerPt.lat, centerPt.lon)
@@ -198,7 +198,7 @@ export default function TripMap({
           centerPt = fb.center;
           originPt = fb.originPoint;
           points = fb.points;
-          isDomestic = !!centerPt && isInChina(centerPt.lat, centerPt.lon);
+          isDomestic = !!centerPt && isInChinaStrict(centerPt.lat, centerPt.lon);
         }
         if (!alive) return;
 
@@ -291,14 +291,26 @@ export default function TripMap({
     setEnginePref(v);
   }
 
+  // 天数按钮从「行程本身」推导，不依赖定位结果——哪怕某天全部定位失败，
+  // 这天的按钮也不能消失（之前从 resolved 推导，第 N 天定位全挂时按钮整个不见）
   const dayNumbers = useMemo(
-    () => Array.from(new Set(resolved.map((r) => r.day))).sort((a, b) => a - b),
-    [resolved],
+    () => Array.from(new Set(days.map((d) => d.day))).sort((a, b) => a - b),
+    [days],
   );
   const mappedCount = resolved.length;
   const totalPlaces = useMemo(
     () => days.reduce((n, d) => n + d.items.filter(mappable).length, 0),
     [days],
+  );
+  // 聚焦天的主题（地图左上角「第 N 天 · 主题」浮层，与首页展示带一致）
+  const focusedTheme =
+    selectedDay === null
+      ? null
+      : (days.find((d) => d.day === selectedDay)?.theme ?? null);
+
+  // 引擎登记的缩放接口 → 首页同款 +/- 覆盖控件
+  const zoomApiRef = useRef<{ zoomIn: () => void; zoomOut: () => void } | null>(
+    null,
   );
 
   const engineProps = {
@@ -310,6 +322,11 @@ export default function TripMap({
     meta,
     selectedDay,
     hoverKey,
+    // 国内 → 高德中文瓦片；出境 → CARTO（与首页出境 demo 一致）。未判定时先按国内出图
+    tiles: (domestic === false ? "osm" : "amap") as "amap" | "osm",
+    onZoomApi: (api: { zoomIn: () => void; zoomOut: () => void } | null) => {
+      zoomApiRef.current = api;
+    },
     onHoverKey,
     spot,
     spotClearSeq,
@@ -415,6 +432,40 @@ export default function TripMap({
           )}
           {engine === "leaflet" && <TripMapLeaflet {...engineProps} />}
         </div>
+
+        {/* 首页同款 +/- 缩放控件：置于右上，驱动当前引擎（不依赖 Leaflet 原生控件） */}
+        <div className="absolute right-3 top-3 z-[1001] flex flex-col overflow-hidden rounded-lg border border-line bg-white/92 shadow-soft backdrop-blur">
+          <button
+            type="button"
+            onClick={() => zoomApiRef.current?.zoomIn()}
+            aria-label="放大"
+            className="grid h-8 w-8 cursor-pointer place-items-center text-xl font-semibold leading-none text-ink transition hover:bg-surface-2"
+          >
+            +
+          </button>
+          <span className="h-px w-full bg-line" aria-hidden />
+          <button
+            type="button"
+            onClick={() => zoomApiRef.current?.zoomOut()}
+            aria-label="缩小"
+            className="grid h-8 w-8 cursor-pointer place-items-center text-xl font-semibold leading-none text-ink transition hover:bg-surface-2"
+          >
+            −
+          </button>
+        </div>
+
+        {/* 聚焦某天时的信息浮层（首页展示带同款）：第 N 天 · 主题 */}
+        {selectedDay !== null && (
+          <div className="pointer-events-none absolute left-3 top-3 z-[1000] flex items-center gap-2 rounded-lg border border-line bg-white/92 px-3 py-2 shadow-soft backdrop-blur">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ background: colorOf(selectedDay) }}
+            />
+            <span className="text-xs font-bold text-ink">
+              第 {selectedDay} 天{focusedTheme ? ` · ${focusedTheme}` : ""}
+            </span>
+          </div>
+        )}
 
         {/* 引擎手动切换（也是高德空白 canvas 等「检测不出的失败」的逃生门） */}
         {engine === "amap" && (

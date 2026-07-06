@@ -1,24 +1,32 @@
 "use client";
 
 /**
- * 行程地图 · Leaflet 2D 引擎（高德中文栅格瓦片）。
- * 出境行程的默认引擎；也是国内行程在高德 JSAPI 不可用时的保底。
+ * 行程地图 · Leaflet 2D 引擎——与首页展示带（ShowcaseMapLeaflet）同一套视觉：
+ *  - 国内 tiles="amap"：高德中文栅格瓦片 + GCJ-02 加偏落点（观感即高德 2D 图）；
+ *  - 出境 tiles="osm"：CARTO Voyager（OSM 数据 + 全球 CDN）+ 原始 WGS-84；
+ *  - 针脚：类别色水滴 + 当天序号 + 常驻名称标签（.sc-lfmarker / .sc-lflabel）；
+ *  - 路线：白描边打底 + 按天配色流动虚线；
+ *  - 缩放：原生滚轮/双击 + shell 的首页同款 +/- 覆盖控件（onZoomApi 登记）。
  * 坐标解析由 shell（TripMap.tsx）完成，这里只管画：针脚/动线/弹窗/联动。
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { Map as LMap, LayerGroup, Marker } from "leaflet";
+import type { Map as LMap, LayerGroup, Marker, TileLayer } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   colorOf,
   esc,
   itemPopupHtml,
-  pinHtml,
+  kindHex,
+  labeledPinHtml,
+  shortName,
   spotIconHtml,
   spotPopupHtml,
   toGcj,
+  toWgs,
   SPOT_FOCUS_WINDOW_MS,
   type EngineProps,
+  type Pt,
   type Resolved,
   type SpotFocus,
 } from "./map-core";
@@ -32,6 +40,8 @@ export default function TripMapLeaflet({
   meta,
   selectedDay,
   hoverKey,
+  tiles = "amap",
+  onZoomApi,
   onHoverKey,
   spot,
   spotClearSeq,
@@ -42,16 +52,28 @@ export default function TripMapLeaflet({
   const onHoverKeyRef = useRef(onHoverKey);
   const onLocateItemRef = useRef(onLocateItem);
   const onAddSpotRef = useRef(onAddSpot);
+  const onZoomApiRef = useRef(onZoomApi);
   useEffect(() => {
     onHoverKeyRef.current = onHoverKey;
     onLocateItemRef.current = onLocateItem;
     onAddSpotRef.current = onAddSpot;
+    onZoomApiRef.current = onZoomApi;
   });
 
-  // ── Leaflet 实例（只建一次） ──
+  // 落点投影随底图走：高德瓦片要 GCJ-02 加偏，CARTO（OSM 系）用原始 WGS-84
+  const project = (pt: Pt): [number, number] => {
+    if (tiles === "osm") {
+      const w = toWgs(pt);
+      return [w.lat, w.lon];
+    }
+    return toGcj(pt);
+  };
+
+  // ── Leaflet 实例（只建一次；瓦片层随 tiles 判定切换） ──
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
+  const tileRef = useRef<TileLayer | null>(null);
   const LRef = useRef<typeof import("leaflet") | null>(null);
   // 条目 key → marker：hover/定位联动用（重绘时重建）
   const markerByKey = useRef<Map<string, Marker>>(new Map());
@@ -70,35 +92,65 @@ export default function TripMapLeaflet({
       if (disposed || !mapEl.current || mapRef.current) return;
       LRef.current = L;
       const map = L.map(mapEl.current, {
-        zoomControl: true,
-        scrollWheelZoom: false, // 避免页面滚动时误缩放；按 + / 拖拽缩放
+        // 与首页展示地图一致：无原生缩放控件（shell 出 +/- 覆盖控件）、
+        // 滚轮/双击/拖拽全开放
+        zoomControl: false,
+        scrollWheelZoom: true,
         attributionControl: true,
       }).setView([35.68, 139.76], 11);
-      // 与首页展示地图一致：高德中文瓦片（scl=1=含区县/街道/POI 中文注记，style=7 标准电子图）。
-      // 高德是 GCJ-02 加偏坐标 → 所有落点须经 toGcj() 换算，否则针脚偏移。.sc-tiles 降饱和到暖纸调。
-      L.tileLayer(
-        "https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
-        {
-          subdomains: "1234",
-          maxZoom: 18,
-          className: "sc-tiles",
-          attribution: '&copy; <a href="https://amap.com">高德地图</a>',
-        },
-      ).addTo(map);
+      map.attributionControl.setPrefix(false);
       layerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
+      onZoomApiRef.current?.({
+        zoomIn: () => map.zoomIn(),
+        zoomOut: () => map.zoomOut(),
+      });
       setReady(true);
     })();
     return () => {
       disposed = true;
+      onZoomApiRef.current?.(null);
       mapRef.current?.remove();
       mapRef.current = null;
       layerRef.current = null;
+      tileRef.current = null;
       setReady(false);
     };
   }, []);
 
-  // ── 重绘标记 / 路线（数据或选中天变化时） ──
+  // ── 瓦片层（tiles 由 shell 在国内判定后传入，可能从默认 amap 切到 osm）──
+  useEffect(() => {
+    const L = LRef.current;
+    const map = mapRef.current;
+    if (!ready || !L || !map) return;
+    tileRef.current?.remove();
+    tileRef.current = (
+      tiles === "osm"
+        ? // 出境底图：CARTO Voyager（与首页出境 demo 同款；osm.org 官方瓦片慢且限流）
+          L.tileLayer(
+            "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+            {
+              subdomains: "abcd",
+              maxZoom: 20,
+              className: "sc-tiles",
+              attribution: "&copy; OpenStreetMap &copy; CARTO",
+            },
+          )
+        : // 国内底图：高德中文瓦片（scl=1=含区县/街道/POI 中文注记，style=7 标准电子图），
+          // GCJ-02 加偏坐标 → 所有落点须经 project() 换算，否则针脚偏移
+          L.tileLayer(
+            "https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
+            {
+              subdomains: "1234",
+              maxZoom: 18,
+              className: "sc-tiles",
+              attribution: '&copy; <a href="https://amap.com">高德地图</a>',
+            },
+          )
+    ).addTo(map);
+  }, [ready, tiles]);
+
+  // ── 重绘标记 / 路线（数据、选中天或底图变化时） ──
   useEffect(() => {
     const L = LRef.current;
     const map = mapRef.current;
@@ -111,25 +163,25 @@ export default function TripMapLeaflet({
     const allLatLng: [number, number][] = [];
     const focusLatLng: [number, number][] = [];
 
-    // 掉落进场（与落地页演示一致）：按落图顺序错峰，reduced-motion 由全局 CSS 钳制
+    // 掉落进场（与首页演示一致）：按落图顺序错峰，reduced-motion 由全局 CSS 钳制
     let dropIdx = 0;
-    const pin = (color: string, label: string, dim: boolean, size = 30) => {
-      const delay = Math.min(dropIdx++ * 60, 720);
-      return L.divIcon({
-        className: "",
-        html: pinHtml(color, label, dim, delay),
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size - 2],
-        popupAnchor: [0, -size + 4],
+    const nextDelay = () => Math.min(dropIdx++ * 60, 720);
+
+    // 首页同款针脚：类别色 + 当天序号 + 常驻名称标签；dim 由 .sc-lfdim 整体淡出
+    const labeledIcon = (color: string, num: string, name: string, dim: boolean) =>
+      L.divIcon({
+        className: `sc-lfmarker${dim ? " sc-lfdim" : ""}`,
+        html: labeledPinHtml(color, num, name, nextDelay()),
+        iconSize: [34, 34],
+        iconAnchor: [17, 32],
+        popupAnchor: [0, -30],
       });
-    };
 
     // 出发地
     if (origin) {
-      const dim = focused !== null;
-      const o = toGcj(origin);
+      const o = project(origin);
       L.marker(o, {
-        icon: pin("#0f172a", "起", dim, 34),
+        icon: labeledIcon("#0f172a", "起", shortName(meta.origin ?? origin.label), focused !== null),
         zIndexOffset: 1000,
       })
         .bindPopup(
@@ -147,16 +199,25 @@ export default function TripMapLeaflet({
     });
 
     for (const [day, items] of byDay) {
-      const color = colorOf(day);
+      const dayColor = colorOf(day);
       const dim = focused !== null && focused !== day;
-      const latlngs = items.map((r) => toGcj(r.pt));
+      const latlngs = items.map((r) => project(r.pt));
 
-      // 当天动线
+      // 当天动线：白描边打底 + 按天配色流动虚线（首页同款）
       if (latlngs.length > 1) {
+        if (!dim) {
+          L.polyline(latlngs, {
+            color: "#fff",
+            weight: 7,
+            opacity: 0.9,
+            lineCap: "round",
+            lineJoin: "round",
+          }).addTo(group);
+        }
         L.polyline(latlngs, {
-          color,
+          color: dayColor,
           weight: 3,
-          opacity: dim ? 0.12 : 0.7,
+          opacity: dim ? 0.12 : 0.85,
           className: dim ? "" : "tp-route",
           lineCap: "round",
           lineJoin: "round",
@@ -166,11 +227,11 @@ export default function TripMapLeaflet({
       items.forEach((r, idx) => {
         const pos = latlngs[idx];
         const m: Marker = L.marker(pos, {
-          icon: pin(color, String(r.step), dim),
+          icon: labeledIcon(kindHex(r.kind), String(r.step), shortName(r.title), dim),
           zIndexOffset: dim ? 0 : 500,
           riseOnHover: true,
         });
-        m.bindPopup(itemPopupHtml(r, color), { className: "tp-pop-wrap" });
+        m.bindPopup(itemPopupHtml(r, dayColor), { className: "tp-pop-wrap" });
         // 弹窗「在行程中查看」→ 页面滚回该条目（触屏的针脚→列表反向联动）
         m.on("popupopen", () => {
           m.getPopup()
@@ -182,11 +243,7 @@ export default function TripMapLeaflet({
               { once: true },
             );
         });
-        // 悬停轻提示 + 双向联动（点击仍是详情弹窗）；direction auto 避免贴边裁切
-        m.bindTooltip(`${r.time ? `${esc(r.time)} · ` : ""}${esc(r.title)}`, {
-          direction: "auto",
-          className: "tp-tip",
-        });
+        // 名称标签常驻，无需 tooltip；hover 双向联动（点击仍是详情弹窗）
         m.on("mouseover", () => onHoverKeyRef.current?.(r.key));
         m.on("mouseout", () => onHoverKeyRef.current?.(null));
         m.addTo(group);
@@ -206,7 +263,7 @@ export default function TripMapLeaflet({
           iconAnchor: [12, 12],
           popupAnchor: [0, -12],
         });
-        const pos = toGcj(s.pt);
+        const pos = project(s.pt);
         const m: Marker = L.marker(pos, {
           icon,
           zIndexOffset: 200,
@@ -263,10 +320,12 @@ export default function TripMapLeaflet({
     } else if (fitTarget.length > 1) {
       map.fitBounds(fitTarget, { padding: [48, 48], maxZoom: 15, animate: true });
     } else if (center) {
-      map.setView(toGcj(center), 11);
+      map.setView(project(center), 11);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     ready,
+    tiles,
     resolved,
     resolvedSpots,
     showSpots,
@@ -276,14 +335,10 @@ export default function TripMapLeaflet({
     meta.origin,
   ]);
 
-  // ── 列表行 hover → 对应针脚放大 + 轻提示（反向由 marker mouseover 回传 onHoverKey）──
+  // ── 列表行 hover → 对应针脚放大 + 标签点亮（反向由 marker mouseover 回传 onHoverKey）──
   useEffect(() => {
     for (const [key, m] of markerByKey.current) {
-      const el = m.getElement()?.querySelector(".tp-pin");
-      if (!el) continue;
-      el.classList.toggle("tp-hot", key === hoverKey);
-      if (key === hoverKey) m.openTooltip();
-      else m.closeTooltip();
+      m.getElement()?.classList.toggle("sc-lfmarker-hot", key === hoverKey);
     }
     // resolved/selectedDay 变化会重建 marker，需重放当前 hover 态
   }, [hoverKey, resolved, selectedDay]);

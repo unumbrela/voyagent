@@ -926,7 +926,6 @@ export default function TripPage() {
                               item={it}
                               index={ii}
                               number={ii + 1}
-                              dayColor={dayColorOf(d.day)}
                               meta={meta}
                               tripId={id}
                               provenance={provenanceOf(it)}
@@ -2446,7 +2445,6 @@ function ItemCard({
   item,
   index = 0,
   number,
-  dayColor,
   meta,
   tripId,
   provenance,
@@ -2462,8 +2460,6 @@ function ItemCard({
   index?: number;
   /** 当天内序号（编号针；尽量对应地图针） */
   number?: number;
-  /** 当天配色（编号针底色，与地图针一致） */
-  dayColor?: string;
   meta: Meta;
   tripId: string;
   provenance: Provenance | null;
@@ -2487,7 +2483,8 @@ function ItemCard({
   // 城际交通才显示搜车票/搜航班；打车/地铁/步行等本地交通不显示
   const longHaul = item.kind === "transit" && !LOCAL_TRANSIT_RE.test(`${item.title} ${item.detail}`);
 
-  const pinColor = dayColor ?? kindColor(item.kind);
+  // 编号针=类别色，与地图针脚同色同号（首页展示带同一套视觉语言）
+  const pinColor = kindColor(item.kind);
   const catColor = kindColor(item.kind);
   const catLabel = (KIND_META as Record<string, { label: string }>)[item.kind]?.label ?? "活动";
   const KindIcon = KIND_ICONS[item.kind] ?? KIND_ICONS.other;
@@ -2665,7 +2662,7 @@ function ItemCard({
         placeholder="时间"
         className={`font-data absolute left-0 top-3 w-14 text-right text-xs text-muted ${editable}`}
       />
-      {/* 编号针（对齐时间轴，颜色=当天色，对应地图针；联动悬停时放大） */}
+      {/* 编号针（对齐时间轴，颜色=类别色，与地图针同色同号；联动悬停时放大） */}
       <div
         className="absolute top-3 z-10 -translate-x-1/2"
         style={{ left: RAIL_X }}

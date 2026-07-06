@@ -83,6 +83,15 @@ export const KIND_COLOR: Record<string, string> = {
   transit: "var(--c-transit)",
 };
 
+/** 类别 → 落地色值（针脚/标签描边要塞进 divIcon 的行内样式，与 globals.css --c-* 一致） */
+const KIND_HEX: Record<string, string> = {
+  activity: "#6366f1",
+  food: "#f97316",
+  rest: "#10b981",
+  transit: "#3b82f6",
+};
+export const kindHex = (k: string) => KIND_HEX[k] ?? "#9ca3af";
+
 /** 哪些条目值得落到地图上（有具体地点的）。本地交通/纯休息标题太泛，靠 geocode 结果自然过滤。 */
 export function mappable(it: Item): boolean {
   if (!it.title?.trim()) return false;
@@ -151,6 +160,36 @@ export function pinHtml(
   return `<div class="tp-pin tp-drop${dim ? " tp-dim" : ""}" style="--c:${color};animation-delay:${delay}ms"><div class="tp-pin-inner"><span>${label}</span></div></div>`;
 }
 
+/** 针脚旁常驻名称标签的短名：去括号 → 取「·/：」首段 → 剥活动动词前缀 → 超长截断 */
+export function shortName(title: string): string {
+  let t = title.replace(/[（(][^）)]*[）)]/g, " ").trim();
+  const seg = t.split(/[·•—–:：]/)[0].trim();
+  if (seg.length >= 2) t = seg;
+  const stripped = t
+    .replace(
+      /^(?:游览|参观|打卡|夜游|夜逛|漫步|漫游|闲逛|逛逛|逛|探访|探秘|走进|前往|抵达|入住|品尝|品味|体验|观赏|欣赏|拜访|寻味|觅食)\s*/,
+      "",
+    )
+    .trim();
+  if (stripped.length >= 2) t = stripped;
+  if (!t) t = title;
+  return t.length > 12 ? `${t.slice(0, 11)}…` : t;
+}
+
+/** 首页展示带同款「编号针脚 + 常驻名称标签」（.sc-lfmarker divIcon 内容） */
+export function labeledPinHtml(
+  color: string,
+  num: string,
+  name: string,
+  delay: number,
+): string {
+  // --c 同时写在针脚与标签上：标签 hover 描边色 var(--c) 取自身，不受兄弟节点限制
+  return (
+    `<div class="tp-pin tp-drop" style="--c:${color};animation-delay:${delay}ms"><div class="tp-pin-inner"><span>${esc(num)}</span></div></div>` +
+    `<span class="sc-lflabel" style="--c:${color}">${esc(name)}</span>`
+  );
+}
+
 /** 触屏定位焦点（5s 窗口内引擎跳过取景自适应，改聚焦该针脚并开弹窗） */
 export interface SpotFocus {
   key: string;
@@ -168,6 +207,10 @@ export interface EngineProps {
   meta: Meta;
   selectedDay: number | null;
   hoverKey: string | null;
+  /** 底图：amap=高德中文瓦片+GCJ 落点（国内）；osm=CARTO Voyager+WGS 落点（出境，与首页 demo 一致） */
+  tiles?: "amap" | "osm";
+  /** 就绪后登记缩放接口（供 shell 的首页同款 +/- 覆盖控件驱动），卸载回传 null */
+  onZoomApi?: (api: { zoomIn: () => void; zoomOut: () => void } | null) => void;
   onHoverKey?: (key: string | null) => void;
   /** 触屏定位目标（每次点按传新对象以重复触发）；引擎内部记 5s 窗口 */
   spot: { key: string } | null;
