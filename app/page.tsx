@@ -79,6 +79,13 @@ export default function Home() {
   const heroGlow = useMotionTemplate`radial-gradient(360px circle at ${glowX} ${glowY}, rgba(47,212,198,0.18), transparent 68%)`;
   function onHeroMove(e: React.MouseEvent<HTMLElement>) {
     if (reduceMotion) return;
+    // 指针进入 Hero 地图时归平 3D 视差：CSS 旋转会让 Leaflet 的屏幕坐标→经纬度换算错位、
+    // 拖拽发飘，故地图上不做视差，让它回到无旋转坐标系（其余区域照常视差）。
+    if ((e.target as HTMLElement)?.closest?.("[data-hero-map]")) {
+      hpx.set(0);
+      hpy.set(0);
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     hpx.set((e.clientX - r.left) / r.width - 0.5);
     hpy.set((e.clientY - r.top) / r.height - 0.5);
@@ -1065,7 +1072,11 @@ function HeroMock() {
         </div>
 
         {/* 右：真·Leaflet 地图上的步行路径（真实高德底图 + 编号针脚 + hover 联动） */}
-        <div className="relative hidden min-h-[440px] border-l border-line bg-[#eef1ee] sm:block">
+        {/* data-hero-map：指针悬于此块时 onHeroMove 归平 3D 视差，保证 Leaflet 拖拽坐标精准 */}
+        <div
+          data-hero-map
+          className="relative hidden min-h-[440px] border-l border-line bg-[#eef1ee] sm:block"
+        >
           <HeroTripMap
             stops={stops}
             hover={hover}

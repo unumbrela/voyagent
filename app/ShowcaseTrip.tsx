@@ -27,6 +27,17 @@ const ShowcaseMapLeaflet = dynamic(() => import("./ShowcaseMapLeaflet"), { ssr: 
 // key 在构建期内联；有 key 且底图为高德时走 3D，否则走 Leaflet
 const HAS_AMAP_KEY = !!process.env.NEXT_PUBLIC_AMAP_KEY;
 
+// ⚠️ 高德 3D 叠层默认关闭 —— 见下方「为何默认走 Leaflet」。
+// 高德 3D 依赖硬件 WebGL 才能真正把地图画进 canvas。实测在若干环境（WSL 软件渲染、
+// 部分 Windows Chrome）里，高德只建出一个「空白/透明的 canvas」却没渲染出地图：
+// ShowcaseMapAMap 仅以「容器内是否出现 <canvas>」判就绪，于是误判 amapReady=true，
+// 让这层透明死图盖到 Leaflet 之上、pointer-events:auto 吞掉全部缩放/平移/滚轮/双击，
+// 用户看到的其实是透过它的底层 Leaflet 2D 图（看着是平的，却完全点不动）。
+// 而「空白但有 canvas 的高德」与「正常高德」在外部无法可靠区分（canvas 被跨域瓦片
+// 污染，读不了像素）。故默认只用可靠、可交互的 Leaflet（渲染同一套高德中文瓦片，
+// 观感同为 2D 俯视）。待高德 3D 鉴权/环境确认可稳定出图后，把此开关置 true 即恢复。
+const ENABLE_AMAP_3D = false;
+
 /** 地图缩放接口：Leaflet / 高德各自实现并登记，供统一 +/- 控件调用 */
 type ZoomApi = { zoomIn: () => void; zoomOut: () => void };
 
@@ -76,8 +87,9 @@ export default function ShowcaseTrip({
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
 
-  // 仅国内(amap)且有 key 时叠高德 3D；出境 osm demo 永远用 Leaflet（高德海外注记稀疏）
-  const useAmap = tiles === "amap" && HAS_AMAP_KEY;
+  // 仅国内(amap)、有 key、且显式开启高德 3D 时才叠高德层；否则一律用可交互的 Leaflet。
+  // 默认关闭见上方 ENABLE_AMAP_3D 注释：避免空白高德层盖死 Leaflet 导致地图无法缩放平移。
+  const useAmap = ENABLE_AMAP_3D && tiles === "amap" && HAS_AMAP_KEY;
   const TransportIcon = transport === "flight" ? Plane : TrainFront;
 
   const rootRef = useRef<HTMLDivElement>(null);

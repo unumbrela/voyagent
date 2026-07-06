@@ -3,9 +3,10 @@
 /**
  * Hero 专属真地图 · Leaflet 2D + 高德中文栅格瓦片（GCJ-02 加偏）。
  *
- * 与中间展示带同源的「真地图 + 真实路径」，但为 Hero 的 3D 悬浮窗口特调：
- *   · 只开 +/- 缩放按钮，关掉拖拽/滚轮——CSS 3D 旋转下屏幕坐标→经纬度换算会错位，
- *     缩放按钮不依赖该换算故照常工作；同时不劫持页面滚动。
+ * 与中间展示带**同引擎、同交互**：开放全部手势（拖拽/滚轮/双击/双指/框选）+ 右上 +/- 按钮。
+ *   · 曾因 Hero 的 CSS 3D 视差（perspective+rotate）会让屏幕坐标→经纬度换算错位而关掉拖拽/滚轮；
+ *     现改为「指针悬于地图时归平视差」（见 page.tsx onHeroMove 的 data-hero-map 分支），
+ *     地图回到无旋转坐标系，拖拽/滚轮遂与下方展示带一致地精准工作。
  *   · 针脚用「序号」而非类别图标，与左侧逐日卡片编号一一对应；名称标签仅悬停时浮现。
  *   · 列表 ↔ 针脚双向 hover 联动（hero-lfmarker-hot）。
  */
@@ -44,18 +45,14 @@ export default function HeroTripMap({ stops, hover, onHover, reduced }: Props) {
       const center = latlngs[0] ?? [31.318, 120.628];
 
       const map = L.map(mapEl.current, {
-        // 3D 悬浮窗内：只保留 +/- 缩放；拖拽/滚轮/双击缩放全关（坐标换算在 CSS 变换下不可靠）
+        // 与下方展示带一致：开放全部交互。拖拽/双击/双指/框选/键盘默认即开，仅需显式开滚轮。
+        // （原先因 CSS 3D 视差会错位而全关；现由 page.tsx 在指针悬于地图时归平视差来消除错位。）
         zoomControl: false,
-        scrollWheelZoom: false,
-        dragging: false,
-        touchZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false,
-        // 允许分数级缩放：fitBounds 才能精确把动线填满这块高瘦面板（否则整数级会停在
-        // 只填一半的档位 → 动线缩在中间显得「只占 1/3」）
+        scrollWheelZoom: true,
+        // zoomSnap:0 允许 fitBounds 落在分数级（否则整数档会停在只填一半 → 动线缩成「1/3」）；
+        // zoomDelta:1 让 +/- 按钮/双击一下一级，与下方展示带手感一致（zoomDelta 不影响 fitBounds）
         zoomSnap: 0,
-        zoomDelta: 0.5,
+        zoomDelta: 1,
       }).setView(center as [number, number], 14);
       L.control.zoom({ position: "topright" }).addTo(map);
       map.attributionControl.setPrefix(false);
