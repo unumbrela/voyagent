@@ -84,7 +84,9 @@ await page.reload();
 await settle(2500);
 await page.click('button[aria-label="打开旅行助手 小行"]');
 await page.waitForTimeout(800);
-const box = page.locator("textarea").first();
+// 注意：行程页的条目标题也是 textarea，务必按 placeholder 定位到 Dock 的输入框，
+// 否则会把这句话打进行程里
+const box = page.getByPlaceholder(/和小行说说/);
 await box.fill("查一下目的地这几天的天气");
 await box.press("Control+Enter");
 const thinking = () => page.getByText("小行思考中…").first();

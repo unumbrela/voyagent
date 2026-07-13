@@ -60,7 +60,7 @@ Six curated demo trips (Suzhou, Kyoto, Yading, Iceland, Santorini, Morocco) buil
 
 "Xiaoxing" is docked in the bottom-right corner of every page. Talk to it by voice or text: plan a new trip, reshuffle a day, search tickets, check the weather, pull travel notes from the community. Any change it wants to make is shown as a proposal card first — nothing touches your itinerary until you confirm. It also shows what it remembers about you, and lets you delete any of it.
 
-![Copilot docked over the trip page: chat, tool calls and a proposal card](docs/screenshots/copilot.jpg)
+![Copilot docked over the trip page: a question, the tool call it triggered, and the generated weather card](docs/screenshots/copilot.jpg)
 
 ## How the pipeline works
 
