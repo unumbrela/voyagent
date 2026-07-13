@@ -53,8 +53,6 @@ export {
   Mic,
   MicOff,
   Keyboard,
-  Volume2,
-  VolumeX,
   Trash2,
   GripVertical,
   Undo2,

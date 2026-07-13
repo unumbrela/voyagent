@@ -37,32 +37,3 @@ export function Markdown({ text }: { text: string }) {
     </div>
   );
 }
-
-/**
- * 供 TTS 用：把 Markdown 剥成可朗读的纯文本（数字人不该念出「星号星号」）。
- * 只做轻量正则（流式增量文本也适用），不追求完美解析。
- */
-export function stripMarkdown(md: string): string {
-  return (
-    md
-      // 代码块围栏/行内代码
-      .replace(/```[a-zA-Z0-9]*\n?/g, "")
-      .replace(/`([^`]+)`/g, "$1")
-      // 图片除 alt，链接留文字
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-      // 加粗/斜体/删除线
-      .replace(/(\*\*|__)(.*?)\1/g, "$2")
-      .replace(/(\*|_)(.*?)\1/g, "$2")
-      .replace(/~~(.*?)~~/g, "$1")
-      // 标题/引用/列表记号/分割线
-      .replace(/^#{1,6}\s+/gm, "")
-      .replace(/^>\s?/gm, "")
-      .replace(/^\s*[-*+]\s+/gm, "")
-      .replace(/^\s*\d+\.\s+/gm, "")
-      .replace(/^\s*([-*_]\s*){3,}$/gm, "")
-      // 表格竖线读起来是噪音
-      .replace(/\|/g, " ")
-      .trim()
-  );
-}

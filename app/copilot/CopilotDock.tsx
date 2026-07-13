@@ -10,57 +10,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import { AnimatePresence, motion } from "motion/react";
 import { useCopilot } from "./store";
 import { CardView } from "./cards";
 import { logEvent } from "@/lib/log";
 import { ProposalCard } from "@/app/ui/proposal";
-import { Markdown, stripMarkdown } from "@/app/ui/markdown";
+import { Markdown } from "@/app/ui/markdown";
 import {
   Compass,
   X,
   Mic,
   Keyboard,
-  Volume2,
-  VolumeX,
   Send,
   Check,
   Brain,
   Trash2,
   Sparkles,
 } from "@/app/ui/icons";
-import type { DigitalHumanHandle, Emotion } from "./DigitalHuman";
-import { AVATAR_MODE, AVATAR_3D_MODELS, DEFAULT_3D_MODEL_ID } from "./avatar-config";
-
-// 数字人仅客户端加载；chunk 加载期间给出夜空占位。
-// 形象四选一：three 实时 3D 数字人（默认）/ video 真人循环视频 / image 写实立绘 / svg 手绘木偶。
-const DigitalHuman = dynamic(
-  () =>
-    AVATAR_MODE === "three"
-      ? import("./DigitalHuman3D")
-      : AVATAR_MODE === "video"
-        ? import("./DigitalHumanVideo")
-        : AVATAR_MODE === "image"
-          ? import("./DigitalHumanImage")
-          : import("./DigitalHuman"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(160deg,#1b2456,#0b1124)]">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-[#2fd4c6]" />
-      </div>
-    ),
-  },
-  // 各形象组件 props 不完全一致（仅 three 版认 modelId）；显式声明并集，让 <DigitalHuman modelId> 通过类型
-) as React.ComponentType<{
-  apiRef: React.MutableRefObject<DigitalHumanHandle | null>;
-  muted?: boolean;
-  variant?: "full" | "bubble";
-  modelId?: string;
-  onSpeakingChange?: (speaking: boolean) => void;
-  onError?: (msg: string) => void;
-}>;
 import type {
   AgentEvent,
   AgentMsg,
@@ -118,18 +84,10 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
   const [busy, setBusy] = useState(false);
   // 「改动前先预览」偏好（RQ1 控制权变量）：开启后 AI 的每次改动都先给预览卡再由用户确认
   const [alwaysPreview, setAlwaysPreview] = useState(false);
-  // 数字人（头像 + 语音 + 表情）开关与静音。默认开启：让小行以数字人形象出现。
-  const [avatarOn, setAvatarOn] = useState(true);
-  const [avatarMuted, setAvatarMuted] = useState(false);
-  // 选中的 3D 模型（远舟/林夏/小樱），仅 three 形象模式下可选
-  const [avatarModel, setAvatarModel] = useState(DEFAULT_3D_MODEL_ID);
   // 输入模式：语音优先（说完自动发送），可切键盘；浏览器不支持 Web Speech 时自动回落键盘
   const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
   // 视图：对话 / 记忆管理（「小行记得你」——AI 记了什么，可见可控）
   const [view, setView] = useState<"chat" | "memory">("chat");
-  // 数字人是否正在说话（面板舞台上显示声浪指示）
-  const [speaking, setSpeaking] = useState(false);
-  const dhRef = useRef<DigitalHumanHandle | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const seededTrip = useRef<string | null>(null);
 
@@ -137,23 +95,11 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
   useEffect(() => {
     try {
       setAlwaysPreview(localStorage.getItem("hci_always_preview") === "1");
-      // 数字人默认开启：仅当显式选过「智能体图标」才用罗盘。
-      // 注意：键名从 hci_digital_human 换成 hci_avatar_style——旧键的历史 "0"
-      // 会让气泡常驻指南针（产品已改为数字人优先，旧值一律作废）。
-      setAvatarOn(localStorage.getItem("hci_avatar_style") !== "agent");
-      setAvatarMuted(localStorage.getItem("hci_avatar_muted") === "1");
-      const savedModel = localStorage.getItem("hci_avatar_model");
-      if (savedModel && AVATAR_3D_MODELS.some((m) => m.id === savedModel)) setAvatarModel(savedModel);
       if (localStorage.getItem("hci_input_mode") === "text") setInputMode("text");
     } catch {
       /* 无存储：用默认值 */
     }
   }, []);
-
-  /** 让数字人切换表情（仅在开启时） */
-  function setEmotion(e: Emotion) {
-    if (avatarOn) dhRef.current?.setEmotion(e);
-  }
 
   // 语音输入（多模态）：语音模式下说完自动发送（对话感）；键盘模式下追加到输入框可再编辑
   const voice = useVoiceDictation((t) => {
@@ -195,45 +141,6 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
       );
       return next;
     });
-  }
-
-  function toggleAvatar() {
-    setAvatarOn((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem("hci_avatar_style", next ? "human" : "agent");
-      } catch {
-        /* 忽略 */
-      }
-      if (!next) dhRef.current?.stop();
-      logEvent("avatar_toggle", { on: next }, getController()?.getTripId() ?? null);
-      return next;
-    });
-  }
-
-  function toggleAvatarMute() {
-    setAvatarMuted((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem("hci_avatar_muted", next ? "1" : "0");
-      } catch {
-        /* 忽略 */
-      }
-      if (next) dhRef.current?.stop();
-      logEvent("avatar_mute", { muted: next }, getController()?.getTripId() ?? null);
-      return next;
-    });
-  }
-
-  function pickAvatarModel(id: string) {
-    dhRef.current?.stop(); // 切模型会重载场景，先停当前朗读
-    setAvatarModel(id);
-    try {
-      localStorage.setItem("hci_avatar_model", id);
-    } catch {
-      /* 忽略 */
-    }
-    logEvent("avatar_model", { model: id }, getController()?.getTripId() ?? null);
   }
 
   useEffect(() => {
@@ -286,19 +193,9 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
         break;
       case "text":
         setItems((s) => [...s, { kind: "assistant", text: e.delta }]);
-        if (avatarOn && e.delta.trim()) {
-          // 朗读前剥掉 Markdown 记号，数字人不该念出「星号星号」
-          dhRef.current?.speak(stripMarkdown(e.delta));
-          logEvent(
-            "avatar_speak",
-            { len: e.delta.length, muted: avatarMuted },
-            getController()?.getTripId() ?? null,
-          );
-        }
         break;
       case "tool_call":
         setItems((s) => [...s, { kind: "tool", label: e.label }]);
-        setEmotion("thinking");
         break;
       case "tool_result":
         if (e.card) setItems((s) => [...s, { kind: "card", card: e.card! }]);
@@ -319,16 +216,13 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
         if (e.kind === "apply_patch") {
           getController()?.applyDays(e.days, e.references);
           setItems((s) => [...s, { kind: "notice", text: e.summary + " · 已应用", undo: true }]);
-          setEmotion("happy");
         } else if (e.kind === "navigate") {
           setItems((s) => [...s, { kind: "notice", text: "正在打开新行程…" }]);
-          setEmotion("happy");
           router.push(`/trips/${e.tripId}`);
         }
         break;
       case "error":
         setItems((s) => [...s, { kind: "notice", text: "出错了：" + e.message }]);
-        setEmotion("concerned");
         break;
       case "done":
         break;
@@ -348,7 +242,6 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
     setItems((s) => [...s, { kind: "user", text: content }]);
     setText("");
     setBusy(true);
-    setEmotion("thinking");
     logEvent(
       "chat_send",
       {
@@ -443,7 +336,7 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
 
   return (
     <>
-      {/* 收起态：气泡（默认数字人头像，可切换为智能体图标样式） */}
+      {/* 收起态：气泡 */}
       <AnimatePresence>
         {!open && (
           <motion.div
@@ -464,29 +357,9 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
               title="打开旅行助手 · 小行"
               aria-label="打开旅行助手 小行"
             >
-              {avatarOn ? (
-                // 数字人头像（画布不接管点击，交给按钮打开面板）
-                <span className="pointer-events-none block h-full w-full overflow-hidden rounded-full ring-1 ring-white/25">
-                  <DigitalHuman apiRef={dhRef} muted variant="bubble" modelId={avatarModel} />
-                </span>
-              ) : (
-                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(160deg,#1b2456,#0b1124)] text-[#7ee8dd] ring-1 ring-white/25">
-                  <Compass className="h-7 w-7" aria-hidden />
-                </span>
-              )}
-            </button>
-            {/* 形象切换：数字人 ⇄ 智能体图标（不打开面板） */}
-            <button
-              onClick={toggleAvatar}
-              className="absolute -left-1.5 -top-1.5 flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-[#0b1124]/85 text-[#7ee8dd] shadow-md backdrop-blur transition hover:scale-110 hover:text-white"
-              title={avatarOn ? "切换成图标" : "切换成数字人"}
-              aria-label={avatarOn ? "切换成图标" : "切换成数字人"}
-            >
-              {avatarOn ? (
-                <Compass className="h-3.5 w-3.5" aria-hidden />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              )}
+              <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(160deg,#1b2456,#0b1124)] text-[#7ee8dd] ring-1 ring-white/25">
+                <Compass className="h-7 w-7" aria-hidden />
+              </span>
             </button>
           </motion.div>
         )}
@@ -561,75 +434,6 @@ export default function CopilotDock({ signedIn }: { signedIn: boolean }) {
               </span>
               <Switch checked={alwaysPreview} onToggle={toggleAlwaysPreview} />
             </label>
-
-            {/* 控制条：数字人形象（3D 头像 + 语音 + 表情） */}
-            <div className="flex items-center justify-between border-b border-line bg-surface-2/60 px-4 py-1.5 text-[11px] text-muted">
-              <span title="开启后小行会以数字人出现：会读出回复，说话时有口型和表情，右下角的小圆头像也会变成数字人。">
-                数字人形象
-              </span>
-              <div className="flex items-center gap-2">
-                {avatarOn && (
-                  <button
-                    type="button"
-                    onClick={toggleAvatarMute}
-                    aria-label={avatarMuted ? "取消静音" : "静音"}
-                    title={avatarMuted ? "取消静音（发声）" : "静音（只动不发声）"}
-                    className="rounded px-1 text-muted transition hover:text-teal cursor-pointer"
-                  >
-                    {avatarMuted ? (
-                      <VolumeX className="h-4 w-4" aria-hidden />
-                    ) : (
-                      <Volume2 className="h-4 w-4" aria-hidden />
-                    )}
-                  </button>
-                )}
-                <Switch checked={avatarOn} onToggle={toggleAvatar} />
-              </div>
-            </div>
-
-            {/* 数字人舞台（夜空极光场景） */}
-            {avatarOn && (
-              <div className="relative h-[320px] shrink-0 overflow-hidden border-b border-line bg-[#0b1124]">
-                <DigitalHuman
-                  apiRef={dhRef}
-                  muted={avatarMuted}
-                  modelId={avatarModel}
-                  onSpeakingChange={setSpeaking}
-                />
-                {/* 模型选择器（仅 three 实时 3D 形象下可选：远舟 / 林夏 / 小樱） */}
-                {AVATAR_MODE === "three" && (
-                  <div className="absolute left-2 top-2 flex gap-1 rounded-full bg-[#0b1124]/60 p-0.5 backdrop-blur">
-                    {AVATAR_3D_MODELS.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => pickAvatarModel(m.id)}
-                        title={m.desc}
-                        aria-pressed={avatarModel === m.id}
-                        className={`cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
-                          avatarModel === m.id
-                            ? "bg-[#2fd4c6] text-[#0b1124]"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {speaking && (
-                  <div
-                    className="absolute bottom-2 right-2 flex h-6 items-end gap-[3px] rounded-full bg-[#0b1124]/60 px-2.5 pb-1.5 backdrop-blur"
-                    aria-label="小行正在说话"
-                  >
-                    <span className="dh-eqbar" style={{ animationDelay: "0ms" }} />
-                    <span className="dh-eqbar" style={{ animationDelay: "150ms" }} />
-                    <span className="dh-eqbar" style={{ animationDelay: "300ms" }} />
-                    <span className="dh-eqbar" style={{ animationDelay: "450ms" }} />
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* 记忆管理视图 */}
             {view === "memory" && <MemoryPanel tripId={getController()?.getTripId() ?? null} />}

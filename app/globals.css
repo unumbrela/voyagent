@@ -411,57 +411,6 @@ body::before {
   }
 }
 
-/* ── 数字人（CopilotDock）── */
-/* 星点闪烁 */
-@keyframes dh-twinkle {
-  0%,
-  100% {
-    opacity: 0.12;
-  }
-  50% {
-    opacity: 0.95;
-  }
-}
-.dh-tw {
-  animation: dh-twinkle 3.4s ease-in-out infinite;
-}
-/* 说话声浪条 */
-@keyframes dh-eq {
-  0%,
-  100% {
-    transform: scaleY(0.3);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-.dh-eqbar {
-  width: 3px;
-  height: 12px;
-  border-radius: 2px;
-  background: var(--aurora-teal);
-  transform-origin: bottom;
-  animation: dh-eq 0.9s ease-in-out infinite;
-}
-/* 气泡静帧头像的轻微呼吸（3D 数字人的 bubble 变体用） */
-@keyframes dh-breathe {
-  0%,
-  100% {
-    transform: scale(1.02) translateY(0);
-  }
-  50% {
-    transform: scale(1.045) translateY(-1px);
-  }
-}
-.dh-breathe {
-  animation: dh-breathe 5.5s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .dh-breathe {
-    animation: none;
-  }
-}
-
 /* ── 聊天气泡内的 Markdown 排版（紧凑版，配 app/ui/markdown.tsx） ── */
 .chat-md {
   line-height: 1.6;

@@ -56,11 +56,11 @@
 
 ![京都演示行程：真实航班 + CARTO 底图分日路线](docs/screenshots/demo-kyoto.jpg)
 
-### 3D 数字人旅行助手
+### 常驻右下角的旅行助手
 
-「小行」是 three.js 实时渲染的 3D 形象，配云端 TTS 和口型同步。语音或文字对话即可规划新行程、调整节奏、查车票、看天气。它想做的每个改动都先以提案卡片展示，你确认之后才写入行程。
+「小行」在每个页面的右下角。语音或文字对话即可规划新行程、调整节奏、查车票、看天气、找网友攻略。它想做的每个改动都先以提案卡片展示，你确认之后才写入行程；它记住了你哪些偏好，也能在面板里看到并删掉。
 
-![行程页上的 3D 数字人助手](docs/screenshots/copilot.jpg)
+![行程页上的旅行助手：对话、工具调用与提案卡](docs/screenshots/copilot.jpg)
 
 ## 流水线怎么工作
 
@@ -103,7 +103,6 @@ orchestrator–worker 结构，编排逻辑在服务端自持（`lib/pipeline.ts
 | 模型 | DeepSeek `deepseek-chat`（OpenAI 兼容接口 + function calling），provider 抽象可换模型 |
 | 检索 | 自建工具调用循环 + Tavily 搜索后端（可插拔） |
 | 地图 | Leaflet + 高德瓦片（国内）/ CARTO（境外），高德 PlaceSearch 地理编码 |
-| 数字人 | three.js（glTF 模型）+ 云 TTS + wawa-lipsync 口型同步 |
 
 ## 如何运行
 
@@ -144,7 +143,6 @@ pnpm dev
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | 同上 |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | 同上，仅服务端使用 |
 | `TAVILY_API_KEY` | 可选 | 联网搜索；不填则相关智能体不联网、靠模型知识作答 |
-| `ZENMUX_API_KEY` 等 TTS 项 | 可选 | 数字人语音；不填回退浏览器 Web Speech |
 | `EMBED_API_BASE / KEY / MODEL` | 可选 | 记忆的语义向量；不填用内置哈希向量兜底 |
 | `NEXT_PUBLIC_AMAP_KEY / SECURITY` | 可选 | 首页 3D 演示地图；不填自动降级 Leaflet 2D |
 
@@ -184,9 +182,9 @@ pnpm dev
 ```
 app/
   api/            # 路由处理器：trips（规划/编辑/分享/ics）、trains、flights、
-                  #   weather、geocode、memories、tts、log、agent …
+                  #   weather、geocode、memories、log、agent …
   trips/[id]/     # 行程详情：可编辑时间轴 + 行程地图 + 可观测面板
-  copilot/        # 数字人助手（CopilotDock + DigitalHuman3D）
+  copilot/        # 右下角智能体 Dock（对话 / 提案卡 / 记忆面板）
   study/          # HCI 评估问卷（SUS / NASA-TLX / 信任）
   share/[token]/  # 公开只读分享页
   demo/[slug]/    # 目的地演示行程

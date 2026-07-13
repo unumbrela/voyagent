@@ -56,11 +56,11 @@ Six curated demo trips (Suzhou, Kyoto, Yading, Iceland, Santorini, Morocco) buil
 
 ![Kyoto demo trip: real flights, per-day routes on a CARTO basemap](docs/screenshots/demo-kyoto.jpg)
 
-### A 3D travel copilot
+### A copilot that can actually edit the trip
 
-"Xiaoxing" is a real-time three.js avatar with cloud TTS and lip sync. Talk to it by voice or text: plan a new trip, reshuffle a day, search tickets, check the weather. Any change it wants to make is shown as a proposal card first — nothing touches your itinerary until you confirm.
+"Xiaoxing" is docked in the bottom-right corner of every page. Talk to it by voice or text: plan a new trip, reshuffle a day, search tickets, check the weather, pull travel notes from the community. Any change it wants to make is shown as a proposal card first — nothing touches your itinerary until you confirm. It also shows what it remembers about you, and lets you delete any of it.
 
-![3D digital human copilot docked over the trip page](docs/screenshots/copilot.jpg)
+![Copilot docked over the trip page: chat, tool calls and a proposal card](docs/screenshots/copilot.jpg)
 
 ## How the pipeline works
 
@@ -103,7 +103,6 @@ Retrieved web pages go straight into model context — that's the main indirect-
 | Model | DeepSeek `deepseek-chat` (OpenAI-compatible API + function calling), behind a provider abstraction |
 | Retrieval | hand-rolled tool-calling loop + Tavily search backend (pluggable) |
 | Maps | Leaflet + AMap tiles (China) / CARTO (abroad), AMap PlaceSearch geocoding |
-| Avatar | three.js (glTF) + cloud TTS + wawa-lipsync |
 
 ## Getting started
 
@@ -144,7 +143,6 @@ pnpm dev
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | same page |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | same page; server-side only |
 | `TAVILY_API_KEY` | optional | web search; without it, search-dependent agents answer from model knowledge |
-| `ZENMUX_API_KEY` + TTS vars | optional | avatar voice; falls back to browser Web Speech |
 | `EMBED_API_BASE / KEY / MODEL` | optional | semantic vectors for memory; falls back to a built-in hash embedding |
 | `NEXT_PUBLIC_AMAP_KEY / SECURITY` | optional | 3D demo map on the landing page; degrades to Leaflet 2D |
 
@@ -184,9 +182,9 @@ The project doubles as the platform for a human–computer interaction user stud
 ```
 app/
   api/            # route handlers: trips (plan/edit/share/ics), trains, flights,
-                  #   weather, geocode, memories, tts, log, agent …
+                  #   weather, geocode, memories, log, agent …
   trips/[id]/     # trip detail: editable timeline + live map + observability panel
-  copilot/        # 3D copilot (CopilotDock + DigitalHuman3D)
+  copilot/        # bottom-right agent dock (chat, proposals, memory panel)
   study/          # HCI surveys (SUS / NASA-TLX / trust)
   share/[token]/  # public read-only share page
   demo/[slug]/    # destination demo trips

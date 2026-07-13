@@ -77,9 +77,20 @@ await page.evaluate(() => {
 await page.waitForTimeout(2500);
 await shot("trip-detail");
 
-// 5. 数字人助手（three.js 实时渲染，等模型加载 + 首帧）
+// 5. 右下角智能体：真发一句话，截出对话 + 工具调用 + 卡片
+//    键盘输入模式（无头浏览器没有语音识别，且截图要的是输入框而不是「点击说话」）
+await page.evaluate(() => localStorage.setItem("hci_input_mode", "text"));
+await page.reload();
+await settle(2500);
 await page.click('button[aria-label="打开旅行助手 小行"]');
-await page.waitForTimeout(6000);
+await page.waitForTimeout(800);
+const box = page.locator("textarea").first();
+await box.fill("查一下目的地这几天的天气");
+await box.press("Control+Enter");
+const thinking = () => page.getByText("小行思考中…").first();
+await thinking().waitFor({ timeout: 15000 }).catch(() => {});
+await thinking().waitFor({ state: "detached", timeout: 120000 }).catch(() => {});
+await page.waitForTimeout(1500);
 await shot("copilot");
 
 await browser.close();
